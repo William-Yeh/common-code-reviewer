@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_review_tests:
+        description: "Run LLM review accuracy tests"
+        type: boolean
+        default: false
+
+jobs:
+  validate-structure:
+    name: Validate Skill Structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate structure
+        run: python tests/scripts/validate_structure.py
+
+  review-tests:
+    name: Review Accuracy Tests
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.run_review_tests == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Placeholder
+        run: |
+          echo "LLM review accuracy tests require an API key and are run on-demand."
+          echo "See tests/ for sample files and expected findings."
