@@ -1,10 +1,10 @@
 ---
 name: common-code-reviewer
-description: Rigorous code review as a principal engineer with 10+ years of enterprise
-  experience. Reviews code for clean code, clean architecture, SOLID, functional programming,
-  testability, security, and performance. Supports TypeScript, Python, Java, and Go.
-  Use when the user asks to review code, review a PR, check code quality, or audit
-  changes.
+version: 1.0.0
+description: Use when the user asks to review code, review a PR, check code quality,
+  or audit changes. Performs rigorous code review as a principal engineer with 10+
+  years of enterprise experience, covering architecture, security, performance, design,
+  and implementation for TypeScript, Python, Java, and Go.
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>

@@ -28,60 +28,38 @@ An Agent Skill that performs rigorous code review as a principal engineer with 1
 
 ## Installation
 
-This skill works with any AI agent that supports the [Agent Skills spec](https://agentskills.io). Pick the method that matches your setup.
-
-### Quick install (recommended)
-
-The [`npx skills`](https://github.com/vercel-labs/skills) CLI installs to any supported agent:
+### Recommended: `npx skills`
 
 ```bash
-# Install for all detected agents
 npx skills add William-Yeh/common-code-reviewer
-
-# Install for a specific agent
-npx skills add William-Yeh/common-code-reviewer --agent claude-code
-npx skills add William-Yeh/common-code-reviewer --agent cursor
-npx skills add William-Yeh/common-code-reviewer --agent gemini-cli
 ```
 
-### Manual install
+### Manual installation
 
-Clone (or download) this repo, then copy the skill folder into your agent's skills directory:
+Copy the skill directory to your agent's skill folder:
 
-```bash
-git clone https://github.com/William-Yeh/common-code-reviewer.git
-```
-
-Copy the entire folder to the path your agent expects:
-
-| Agent | Project scope | User / global scope |
-|---|---|---|
-| Claude Code | `.claude/skills/common-code-reviewer/` | `~/.claude/skills/common-code-reviewer/` |
-| Cursor | `.cursor/skills/common-code-reviewer/` | — |
-| Gemini CLI | `.gemini/skills/common-code-reviewer/` | `~/.gemini/skills/common-code-reviewer/` |
-| OpenAI Codex | `.agents/skills/common-code-reviewer/` | `~/.agents/skills/common-code-reviewer/` |
-| Roo Code | `.roo/skills/common-code-reviewer/` | `~/.roo/skills/common-code-reviewer/` |
-| Amp | `.agents/skills/common-code-reviewer/` | `~/.config/agents/skills/common-code-reviewer/` |
-
-For example, to install globally for Claude Code:
-
-```bash
-cp -r common-code-reviewer ~/.claude/skills/common-code-reviewer
-```
-
-No registration or configuration needed — agents auto-discover skills from these directories.
-
-### Gemini CLI native command
-
-Gemini CLI also has a built-in install command:
-
-```bash
-gemini skills install https://github.com/William-Yeh/common-code-reviewer.git
-```
+| Agent | Directory |
+|-------|-----------|
+| Claude Code | `~/.claude/skills/` |
+| Cursor | `.cursor/skills/` |
+| Gemini CLI | `.gemini/skills/` |
+| Amp | `.amp/skills/` |
+| Roo Code | `.roo/skills/` |
+| Copilot | `.github/skills/` |
 
 ## Usage
 
 Compatible with any AI agent that supports the [Agent Skills spec](https://agentskills.io).
+
+### Starter prompts
+
+```
+Review my changes
+Review PR #42
+/common-code-reviewer --relaxed
+/common-code-reviewer --files src/auth.ts src/middleware.ts
+/common-code-reviewer --no-fixes
+```
 
 ### Arguments
 
@@ -91,30 +69,6 @@ Compatible with any AI agent that supports the [Agent Skills spec](https://agent
 | `--relaxed` | Skip NITs, only flag repeated MINOR patterns. |
 | `--no-fixes` | Report issues only, no suggested code. |
 | `--files <paths>` | Review specific files instead of auto-detecting diff. |
-
-### Input Detection
-
-The skill auto-detects what to review:
-
-1. `--files` argument → those files
-2. Feature branch → `git diff main...HEAD`
-3. Unstaged/staged changes → `git diff` + `git diff --cached`
-4. PR number → `gh pr diff <number>`
-
-### Severity Levels
-
-| Severity | Meaning | Merge Impact |
-|---|---|---|
-| **BLOCKER** | Bugs, security vulns, data loss | Must fix |
-| **MAJOR** | Core principle violations, reliability risk | Should fix |
-| **MINOR** | Suboptimal but functional | Recommended |
-| **NIT** | Style preference, no functional impact | Optional |
-
-### Verdict
-
-- **REQUEST CHANGES** — 1+ Blocker
-- **APPROVE WITH COMMENTS** — 0 Blockers, 1+ Major
-- **APPROVE** — Only Minor/Nit or clean
 
 ## Project Structure
 
