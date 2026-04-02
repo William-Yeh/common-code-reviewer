@@ -36,7 +36,7 @@ npx skills add William-Yeh/common-code-reviewer
 
 ### Manual installation
 
-Copy the skill directory to your agent's skill folder:
+Copy the `skill/` directory to your agent's skill folder:
 
 | Agent | Directory |
 |-------|-----------|
@@ -53,12 +53,19 @@ Compatible with any AI agent that supports the [Agent Skills spec](https://agent
 
 ### Starter prompts
 
-```
-Review my changes
-Review PR #42
-/common-code-reviewer --relaxed
+- `Review my changes`
+- `Review PR #42`
+- `Review this code but skip the nitpicks`
+- `Do a thorough review of src/auth.ts`
+- `Check only the security and performance issues`
+
+### CLI
+
+```bash
+/common-code-reviewer                                    # auto-detect diff, full rigor
+/common-code-reviewer --relaxed                         # skip NITs, pattern-only MINORs
+/common-code-reviewer --no-fixes                        # findings only, no suggested code
 /common-code-reviewer --files src/auth.ts src/middleware.ts
-/common-code-reviewer --no-fixes
 ```
 
 ### Arguments
@@ -74,12 +81,13 @@ Review PR #42
 
 ```
 common-code-reviewer/
-├── SKILL.md              # Skill definition (review rules + process)
-├── references/           # Language-specific rules (loaded on demand)
-│   ├── typescript.md
-│   ├── python.md
-│   ├── java.md
-│   └── go.md
+├── skill/                # Agent-installable skill artifact
+│   ├── SKILL.md          # Skill definition (review rules + process)
+│   └── references/       # Language-specific rules (loaded on demand)
+│       ├── typescript.md
+│       ├── python.md
+│       ├── java.md
+│       └── go.md
 ├── tests/
 │   ├── COVERAGE.md       # Rule coverage matrix
 │   ├── scripts/          # CI validation scripts

@@ -1,10 +1,6 @@
 ---
 name: common-code-reviewer
-version: 1.0.0
-description: Use when the user asks to review code, review a PR, check code quality,
-  or audit changes. Performs rigorous code review as a principal engineer with 10+
-  years of enterprise experience, covering architecture, security, performance, design,
-  and implementation for TypeScript, Python, Java, and Go.
+description: Use when the user asks to review code, audit changes, or review a PR.
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>

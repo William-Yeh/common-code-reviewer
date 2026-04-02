@@ -4,9 +4,10 @@ import re
 import sys
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent.parent
-SKILL_MD = SKILL_ROOT / "SKILL.md"
-REFERENCES_DIR = SKILL_ROOT / "references"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SKILL_DIR = REPO_ROOT / "skill"
+SKILL_MD = SKILL_DIR / "SKILL.md"
+REFERENCES_DIR = SKILL_DIR / "references"
 MAX_SKILL_LINES = 500
 
 REQUIRED_REFERENCES = ["typescript.md", "python.md", "java.md", "go.md"]
@@ -33,7 +34,7 @@ def validate_skill_md() -> None:
     print("\n--- Validating SKILL.md ---")
 
     if not SKILL_MD.exists():
-        error("SKILL.md not found at repository root")
+        error("SKILL.md not found at skill/")
         return
 
     content = SKILL_MD.read_text()
@@ -80,7 +81,7 @@ def validate_name(name: str) -> None:
         error(f"name '{name}' contains consecutive hyphens")
 
     # Check name matches parent directory
-    parent_dir = SKILL_ROOT.name
+    parent_dir = REPO_ROOT.name
     if name != parent_dir:
         error(f"name '{name}' does not match parent directory '{parent_dir}'")
     else:
@@ -116,7 +117,7 @@ def validate_internal_links() -> None:
     links = re.findall(r"\[.*?\]\(((?!https?://).*?)\)", content)
 
     for link in links:
-        target = SKILL_ROOT / link
+        target = SKILL_DIR / link
         if not target.exists():
             error(f"Broken link in SKILL.md: {link}")
         else:
@@ -126,7 +127,7 @@ def validate_internal_links() -> None:
 def validate_test_samples() -> None:
     print("\n--- Validating test samples ---")
 
-    tests_dir = SKILL_ROOT / "tests"
+    tests_dir = REPO_ROOT / "tests"
     if not tests_dir.exists():
         warn("tests/ directory not found")
         return
@@ -157,7 +158,7 @@ def validate_test_samples() -> None:
 
 def main() -> None:
     print("=== Agent Skill Structure Validation ===")
-    print(f"Root: {SKILL_ROOT}")
+    print(f"Root: {REPO_ROOT}")
 
     validate_skill_md()
     validate_references()
