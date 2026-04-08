@@ -11,6 +11,8 @@ Maps every general rule from SKILL.md to at least one test sample + finding.
 - `JV2` = java/PaymentService.java
 - `GO1` = go/order_handler.go
 - `GO2` = go/user_service.go
+- `DF1` = dockerfile/Dockerfile-app
+- `DF2` = dockerfile/Dockerfile-builder
 
 ---
 
@@ -101,6 +103,28 @@ Maps every general rule from SKILL.md to at least one test sample + finding.
 
 ---
 
+## Dockerfile-Specific Rules
+
+| Rule | Covered By | Finding # |
+|------|-----------|-----------|
+| FROM latest / unpinned tag | DF1 #1 | ✅ |
+| Mutable tag (no digest) | DF2 #1 | ✅ |
+| No USER in final stage (runs as root) | DF1 #4, DF2 #2 | ✅ |
+| Secret in ENV/ARG | DF1 #2 | ✅ |
+| curl -k / TLS disabled | DF1 #3 | ✅ |
+| Unverified artifact download | DF2 #4 | ✅ |
+| Single-stage with build tools | DF1 #5 | ✅ |
+| Overly broad COPY --from | DF2 #3 | ✅ |
+| apt cleanup in separate RUN layer | DF1 #6 | ✅ |
+| COPY . . before dependency install | DF1 #7 | ✅ |
+| ADD instead of COPY | DF1 #8 | ✅ |
+| Missing WORKDIR | DF1 #9 | ✅ |
+| Missing HEALTHCHECK | DF1 #10, DF2 #6 | ✅ |
+| ARG vs ENV semantics | DF2 #5 | ✅ |
+| Unnamed multi-stage | DF2 #7 | ✅ |
+
+---
+
 ## Summary
 
 | Category | Rules | Covered | Not Covered |
@@ -113,9 +137,10 @@ Maps every general rule from SKILL.md to at least one test sample + finding.
 | Clean Code | 6 | 6 | 0 |
 | Testability | 5 | 4 | 1 (private methods) |
 | Style | 2 | 2 | 0 |
-| **Total** | **44** | **36** | **8** |
+| Dockerfile | 15 | 15 | 0 |
+| **Total** | **59** | **51** | **8** |
 
-**Coverage: 82% (36/44)**
+**Coverage: 86% (51/59)**
 
 ### Uncovered Rules — Analysis
 

@@ -10,7 +10,7 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 REFERENCES_DIR = SKILL_DIR / "references"
 MAX_SKILL_LINES = 500
 
-REQUIRED_REFERENCES = ["typescript.md", "python.md", "java.md", "go.md"]
+REQUIRED_REFERENCES = ["typescript.md", "python.md", "java.md", "go.md", "dockerfile.md"]
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -132,7 +132,7 @@ def validate_test_samples() -> None:
         warn("tests/ directory not found")
         return
 
-    languages = ["typescript", "python", "java", "go"]
+    languages = ["typescript", "python", "java", "go", "dockerfile"]
     for lang in languages:
         lang_dir = tests_dir / lang
         if not lang_dir.exists():
