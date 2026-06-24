@@ -38,6 +38,7 @@ Flag legacy patterns when modern alternatives exist:
 - Branded types for domain primitives (e.g., `UserId`, `Email`)
 - `readonly` on array/object parameters that shouldn't be mutated
 - `using` / `await using` for resource management (Explicit Resource Management)
+- For published libraries: explicit return/export types to enable `isolatedDeclarations` (5.5+) — faster, parallelizable `.d.ts` emit. Flag exported APIs relying on inferred types in packages that ship declarations.
 
 ## Functional Patterns
 

@@ -9,7 +9,7 @@ Follow **PEP 8** as the baseline, enforced by **Ruff** (or Black + isort). Addit
 - **PEP 484 / PEP 526**: Type hints on all public function signatures. Internal functions should have hints when non-obvious.
 - **PEP 585**: Use built-in generics (`list[str]`, `dict[str, int]`) not `typing.List`, `typing.Dict` (deprecated since 3.9).
 - **PEP 604**: Use `X | Y` union syntax, not `Union[X, Y]` (3.10+).
-- **PEP 657**: Use fine-grained `TypeAlias` for complex type expressions.
+- **PEP 695**: Use the `type X = ...` statement for type aliases and inline type parameters (`class Box[T]`, `def first[T](xs: list[T]) -> T`) instead of `TypeAlias` / explicit `TypeVar` declarations (3.12+).
 - **PEP 673**: Use `Self` for methods returning the same class type.
 - Docstrings: Google style or NumPy style — pick one and be consistent within the project. Flag mixed styles.
 - Line length: 88 (Black default) or 120 — respect project config. Do not flag line length if a formatter is configured.
@@ -26,6 +26,8 @@ Do not flag formatting issues that Ruff/Black would auto-fix. Focus on semantic 
 | `NamedTuple` class syntax | `@dataclass(frozen=True)` or `NamedTuple` functional form | 3.7+ |
 | Plain dicts for structured data | `dataclass`, `TypedDict`, or Pydantic `BaseModel` | 3.7+ |
 | `if/elif/elif` chains on a value | `match/case` (structural pattern matching) | 3.10 |
+| `TypeAlias` / explicit `TypeVar` declarations | `type X = ...` statement and inline generics (`class Box[T]`, `def f[T]()`) | 3.12 |
+| `.format()` templating with manual escaping | t-strings (template string literals) for safe custom string processing | 3.14 |
 | `@abstractmethod` + `ABC` for protocols | `Protocol` (structural subtyping) | 3.8+ |
 | `try/except` for flow control | LBYL with guards, or `match/case` | — |
 | Manual `__enter__`/`__exit__` | `contextlib.contextmanager` or `contextlib.asynccontextmanager` | — |
@@ -41,7 +43,7 @@ Do not flag formatting issues that Ruff/Black would auto-fix. Focus on semantic 
 - **Encourage `Protocol`** over `ABC` when you only need structural compatibility, not inheritance.
 - **Encourage `TypeGuard` / `TypeIs`** for custom type narrowing functions.
 - **Flag `cast()`** the same way as TypeScript's `as` — it bypasses checking.
-- **Generics**: Use `TypeVar` with constraints or bounds. Flag unbounded `TypeVar` on public APIs — it's the Python equivalent of `any`.
+- **Generics**: Prefer PEP 695 inline type parameters (`class Box[T]`, `def f[T]()`) over module-level `TypeVar` declarations (3.12+). Use constraints/bounds (`[T: numbers.Real]`) where applicable. Flag unbounded type parameters on public APIs — it's the Python equivalent of `any`.
 - **`TypedDict`** for dictionaries with known keys. Flag raw `dict[str, Any]` for structured data.
 - **`Literal`** types for string enums and fixed values. Flag `str` where only specific values are valid.
 

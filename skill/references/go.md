@@ -29,7 +29,7 @@ Follow **Effective Go** and **Go Code Review Comments** (the official standards)
 | `sync.Mutex` for simple atomics | `atomic.Int64`, `atomic.Bool`, etc. | 1.19 |
 | `ioutil` package | `io` and `os` equivalents | 1.16 |
 | `golang.org/x/exp/maps`, `slices` | `maps`, `slices` stdlib | 1.21 |
-| Goroutine leak with bare `go func()` | `errgroup.Group` for managed goroutine lifecycle | — |
+| Goroutine leak with bare `go func()` | `errgroup.Group`, or `sync.WaitGroup.Go` for fire-and-wait without error collection | 1.25 |
 | Context-less function signatures | Accept `context.Context` as first parameter | 1.7 |
 | `log.Println` / `log.Fatalf` | `slog` (structured logging) | 1.21 |
 | Global logger | Inject `*slog.Logger` via dependency | 1.21 |
@@ -115,7 +115,7 @@ Go concurrency requires careful review:
 - `t.Parallel()`: encourage for independent tests. Flag tests that share mutable state.
 - Prefer stdlib `testing` over testify when possible. If using testify, use `assert` (continues) vs `require` (stops) deliberately.
 - `t.Cleanup()` for teardown instead of `defer` — survives subtests.
-- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization.
+- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization. For testing concurrent code with virtual time, prefer `testing/synctest` (GA in 1.25) over real sleeps.
 - For HTTP handlers: use `httptest.NewRecorder()` and `httptest.NewRequest()`.
 - Flag tests that depend on network, filesystem, or environment without build tags or skip conditions.
 

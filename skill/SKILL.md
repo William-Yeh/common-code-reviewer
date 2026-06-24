@@ -1,10 +1,10 @@
 ---
 name: common-code-reviewer
-version: 1.1.0
 description: Use when the user asks to review code, audit changes, or review a PR.
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
+  version: 1.2.0
 ---
 
 # Code Review
@@ -48,6 +48,7 @@ Detect languages from file extensions in the diff:
 | `.py`, `.pyi` | Python | [references/python.md](references/python.md) |
 | `.java` | Java | [references/java.md](references/java.md) |
 | `.go` | Go | [references/go.md](references/go.md) |
+| `.rs` | Rust | [references/rust.md](references/rust.md) |
 | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` | Dockerfile | [references/dockerfile.md](references/dockerfile.md) |
 
 Load the corresponding reference file(s) for all detected languages before starting the review. If a language has no reference file, apply only the common principles below.

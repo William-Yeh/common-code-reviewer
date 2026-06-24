@@ -19,7 +19,7 @@ These rules supplement the common review framework. Apply them to `Dockerfile`, 
 
 - **Order instructions by change frequency** (ascending): `FROM` → system deps → app deps → app source → config. Placing `COPY . .` before `RUN npm install` busts the dependency cache on every source change — flag as MINOR.
 - **Combine related `RUN` commands**: Multiple `RUN apt-get install` calls create unnecessary layers. Combine with `&&` and clean up in the same layer (`rm -rf /var/lib/apt/lists/*`). Flag as MINOR.
-- **Clean package manager caches in the same `RUN` layer**: `apt-get install` followed by a separate `RUN rm -rf /var/lib/apt/lists/*` does not save space — the data is already committed to the layer below. Must be the same `RUN` instruction (MAJOR).
+- **Clean package manager caches in the same `RUN` layer**: `apt-get install` followed by a separate `RUN rm -rf /var/lib/apt/lists/*` does not save space — the data is already committed to the layer below. Must be the same `RUN` instruction (MAJOR). On BuildKit, prefer a cache mount (`RUN --mount=type=cache,target=/var/cache/apt ...`) to persist the download cache across builds without bloating the image.
 - **Avoid `ADD` when `COPY` suffices**: `ADD` has implicit tar-extraction and URL-fetching behavior. Use `COPY` for local files. Flag `ADD` for local file copy as MINOR.
 
 ## Security

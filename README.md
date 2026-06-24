@@ -25,6 +25,7 @@ An Agent Skill that performs rigorous code review as a principal engineer with 1
 | Python | FastAPI, SQLAlchemy | PEP 8 / 484 / 585 |
 | Java | Spring Boot, Quarkus | Google Java Style |
 | Go | stdlib, Gin, gRPC | Effective Go |
+| Rust | std, Tokio (async) | Rust API Guidelines / Clippy |
 | Dockerfile | Docker, BuildKit, multi-stage builds | Docker best practices |
 
 ## Installation
@@ -89,6 +90,7 @@ common-code-reviewer/
 │       ├── python.md
 │       ├── java.md
 │       ├── go.md
+│       ├── rust.md
 │       └── dockerfile.md
 ├── tests/
 │   ├── COVERAGE.md       # Rule coverage matrix
@@ -97,6 +99,7 @@ common-code-reviewer/
 │   ├── python/
 │   ├── java/
 │   ├── go/
+│   ├── rust/
 │   └── dockerfile/
 └── .github/workflows/    # CI pipeline
 ```
@@ -118,9 +121,17 @@ To add a new language:
 python tests/scripts/validate_structure.py
 ```
 
-**Review accuracy** — runs the skill against intentionally flawed samples and compares against expected findings. See `tests/COVERAGE.md` for the full rule coverage matrix (86%, 51/59 rules).
+**Review accuracy** — runs the skill against intentionally flawed samples and compares against expected findings. See `tests/COVERAGE.md` for the full rule coverage matrix (91%, 64/70 rules).
 
 ## Changelog
+
+### v1.2.0 (2026-06-24)
+
+- Added Rust review rules (`skill/references/rust.md`) — covering `.unwrap()`/`panic` in libraries, ownership/clone smells, `unsafe`/SAFETY, error-type design (`Box<dyn Error>` vs typed enums), and async hazards (blocking-in-async, lock-across-`.await`)
+- Added two Rust test fixtures with expected findings (`tests/rust/`)
+- Closed two previously-uncovered general rules via Rust idioms: *unnecessary allocations in hot paths* and *missing Result/Option types*
+- Rule coverage: 86% → 91% (64/70 rules)
+- Refreshed existing language references for current toolchains: fixed an incorrect PEP 657 citation (now PEP 695 — `type` statement / inline generics) and added Python 3.14 notes (t-strings); refreshed Java to the 25 LTS (scoped values, primitive patterns, flexible constructor bodies); added Go 1.25 (`WaitGroup.Go`, `testing/synctest`), TypeScript `isolatedDeclarations`, and a BuildKit cache-mount note for Dockerfile
 
 ### v1.1.0 (2026-04-08)
 

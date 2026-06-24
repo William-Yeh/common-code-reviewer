@@ -2,6 +2,8 @@
 
 These rules supplement the common review framework. Apply them to `.java` files.
 
+Target the current LTS — **Java 25** (GA September 2025) — when recommending modern features. Java 21 remains a widely-deployed LTS; gate suggestions on the project's actual toolchain version rather than assuming the latest.
+
 ## Style Standard
 
 Follow the **Google Java Style Guide** as the baseline:
@@ -24,6 +26,9 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 | Verbose data classes (getters, setters, equals, hashCode, toString) | `record` | 17 |
 | `instanceof` + manual cast | Pattern matching `instanceof` | 16 |
 | Long `if/else if` chains on type | `switch` with pattern matching | 21 |
+| `instanceof` / `switch` boxing primitives to match | Primitive patterns in `switch` and `instanceof` | 25 |
+| `ThreadLocal` for request-scoped context | Scoped Values (`ScopedValue`) | 25 |
+| Boilerplate validation/`this(...)` before constructor body | Flexible constructor bodies (statements before `super()`/`this()`) | 25 |
 | Extensive class hierarchies for variants | `sealed` classes/interfaces | 17 |
 | `Optional.get()` without check | `orElse`, `orElseThrow`, `map`, `ifPresent` | 8 |
 | `Collections.unmodifiableList(new ArrayList<>(...))` | `List.of()`, `Map.of()`, `Set.of()` | 9 |
@@ -108,3 +113,4 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 - **Lombok abuse**: `@Data` on JPA entities (breaks equals/hashCode with lazy-loaded fields). Use `@Getter` + `@Setter` + explicit `@EqualsAndHashCode` excluding lazy fields, or use records for DTOs.
 - **Over-abstraction**: `AbstractBaseService<T>` with a single implementation — YAGNI. Create abstractions when the second use case arrives.
 - **Ignoring `java.time`**: Using `Date`, `Calendar`, `Timestamp` in new code. Always use `java.time` types.
+- **Mutable `ThreadLocal` for context**: On Java 25+, prefer immutable `ScopedValue` for request/task-scoped context — it has clearer lifetime semantics and works cleanly with virtual threads and structured concurrency. Flag `ThreadLocal` set-and-forget that risks leaking across pooled threads.
