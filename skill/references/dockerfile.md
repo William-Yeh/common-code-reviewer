@@ -2,6 +2,26 @@
 
 These rules supplement the common review framework. Apply them to `Dockerfile`, `Dockerfile.*`, and `*.dockerfile` files.
 
+## Language-Owned Review Rules
+
+| Rule ID | Severity | Review Rule |
+|---|---|---|
+| `dockerfile/latest-base` | BLOCKER | A base image uses `latest` or no tag. |
+| `dockerfile/mutable-base` | MAJOR | A tagged base image is not pinned to a digest. |
+| `dockerfile/root-runtime` | MAJOR | The final stage runs as root. |
+| `dockerfile/baked-secret` | BLOCKER | A secret is persisted through `ARG`, `ENV`, or copied content. |
+| `dockerfile/tls-disabled` | BLOCKER | Artifact retrieval disables TLS verification. |
+| `dockerfile/unverified-artifact` | MAJOR | A downloaded artifact is used without integrity verification. |
+| `dockerfile/single-stage-toolchain` | MAJOR | Build tools remain in the runtime image. |
+| `dockerfile/broad-stage-copy` | MAJOR | A stage copy includes more than the runtime artifact. |
+| `dockerfile/split-package-cleanup` | MAJOR | Package indexes are removed in a later layer than installation. |
+| `dockerfile/cache-hostile-copy` | MINOR | Broad source copying invalidates dependency cache layers. |
+| `dockerfile/implicit-add` | MINOR | `ADD` is used where explicit `COPY` semantics are required. |
+| `dockerfile/missing-workdir` | MINOR | The image relies on the implicit root working directory. |
+| `dockerfile/missing-healthcheck` | MINOR | The runtime image declares no health check. |
+| `dockerfile/confused-build-runtime-config` | MINOR | Build-time and runtime configuration semantics are conflated. |
+| `dockerfile/unnamed-stage` | NIT | A multi-stage build leaves a stage unnamed. |
+
 ## Base Image Hygiene
 
 - **Pin base images to a digest**: `FROM node:20-alpine` is mutable — the tag can be overwritten. Prefer `FROM node:20-alpine@sha256:<digest>` for reproducible builds. Flag floating tags on production images as MAJOR.

@@ -4,7 +4,7 @@ description: Use when the user asks to review code, audit changes, or review a P
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Code Review
@@ -40,9 +40,10 @@ Only review changed lines and their immediate context. Do not review unchanged c
 
 ## Language Detection
 
-Detect languages from file extensions in the diff:
+Detect languages from extension and filename patterns in the diff:
 
-| Extensions | Language | Reference |
+<!-- BEGIN GENERATED LANGUAGES -->
+| Patterns | Language | Reference |
 |---|---|---|
 | `.ts`, `.tsx`, `.js`, `.jsx` | TypeScript/JavaScript | [references/typescript.md](references/typescript.md) |
 | `.py`, `.pyi` | Python | [references/python.md](references/python.md) |
@@ -50,6 +51,7 @@ Detect languages from file extensions in the diff:
 | `.go` | Go | [references/go.md](references/go.md) |
 | `.rs` | Rust | [references/rust.md](references/rust.md) |
 | `Dockerfile`, `Dockerfile.*`, `*.dockerfile` | Dockerfile | [references/dockerfile.md](references/dockerfile.md) |
+<!-- END GENERATED LANGUAGES -->
 
 Load the corresponding reference file(s) for all detected languages before starting the review. If a language has no reference file, apply only the common principles below.
 
@@ -63,6 +65,69 @@ Load the corresponding reference file(s) for all detected languages before start
 | **NIT** | Style preference, minor improvement. No functional impact | Optional |
 
 In `--relaxed` mode, skip NIT findings and only report MINOR when a pattern repeats 3+ times.
+
+## Review Rule Catalog
+
+Every finding-producing instruction resolves to exactly one rule below or to a
+language-owned rule in the loaded Language Reference. Rule IDs and severities are
+part of the interface: do not invent IDs, change severity, or emit findings from
+uncataloged guidance.
+
+| Rule ID | Severity | Review Rule |
+|---|---|---|
+| `common/layer-violation` | MAJOR | Domain or presentation code depends directly on infrastructure concerns. |
+| `common/circular-dependency` | MAJOR | Modules form a dependency cycle. |
+| `common/god-module` | MAJOR | A class, function, or module owns unrelated responsibilities. |
+| `common/anemic-domain` | MAJOR | Domain data is separated from the behavior that governs it. |
+| `common/missing-abstraction` | MAJOR | Repeated variation or coupling lacks a justified abstraction. |
+| `common/framework-coupling` | MAJOR | Core behavior is tightly coupled to a framework or external implementation. |
+| `common/missing-input-validation` | MAJOR | Untrusted input crosses a system boundary without validation. |
+| `common/sql-injection` | BLOCKER | Untrusted input can alter a SQL statement. |
+| `common/command-injection` | BLOCKER | Untrusted input can alter an executed command. |
+| `common/xss` | BLOCKER | Untrusted content can execute in a browser context. |
+| `common/path-traversal` | BLOCKER | Untrusted path input can escape its permitted root. |
+| `common/authorization-gap` | MAJOR | A protected action lacks an authorization decision. |
+| `common/sensitive-data-exposure` | MINOR | Sensitive data is exposed through output, errors, or logs. |
+| `common/insecure-default` | MAJOR | Default configuration creates material security or reliability risk. |
+| `common/unsafe-deserialization` | BLOCKER | Untrusted data is deserialized through an unsafe mechanism. |
+| `common/n-plus-one-query` | MAJOR | A loop performs one query per item where batching is possible. |
+| `common/unbounded-query` | MAJOR | A potentially large query has no limit or pagination. |
+| `common/hot-path-allocation` | MINOR | A hot path performs avoidable allocation or copying. |
+| `common/blocking-in-async` | BLOCKER | Blocking work runs on an asynchronous execution thread. |
+| `common/missing-cache` | MINOR | Expensive stable work is repeatedly recomputed without justified caching. |
+| `common/inefficient-data-structure` | MINOR | A data structure conflicts with the dominant access pattern. |
+| `common/eager-loading` | MAJOR | Unneeded related data is eagerly loaded at material cost. |
+| `common/open-closed-violation` | MAJOR | Adding a variant requires editing central dispatch logic. |
+| `common/unhandled-variant` | MAJOR | An unknown or future variant silently takes an unsafe default path. |
+| `common/liskov-violation` | MAJOR | A subtype breaks the behavior expected through its supertype. |
+| `common/interface-segregation` | MAJOR | An interface forces adapters to implement behavior they do not support. |
+| `common/dependency-inversion` | MAJOR | High-level behavior depends directly on a concrete implementation. |
+| `common/unnecessary-mutation` | MAJOR | Shared or local mutation is used where immutable flow would work. |
+| `common/hidden-side-effect` | MAJOR | Behavior presented as pure performs an undeclared side effect. |
+| `common/shared-mutable-state` | MAJOR | Mutable state is shared without controlled ownership or synchronization. |
+| `common/imperative-transformation` | MINOR | Imperative accumulation obscures a direct transformation. |
+| `common/erased-failure` | MINOR | A boolean, null, or untyped result erases meaningful failure information. |
+| `common/unclear-name` | MINOR | A name fails to reveal intent. |
+| `common/mixed-abstraction` | MINOR | One function mixes materially different levels of abstraction. |
+| `common/magic-literal` | MINOR | An unexplained literal carries domain or operational meaning. |
+| `common/dead-code` | MINOR | Unreachable, unused, or commented-out code remains in the change. |
+| `common/deep-nesting` | MINOR | Control flow is nested deeply enough to obscure behavior. |
+| `common/duplicated-logic` | MINOR | Repeated logic represents one concept that should change together. |
+| `common/hard-coded-dependency` | MAJOR | Behavior constructs or fixes a dependency that tests must replace. |
+| `common/coupled-side-effect` | MAJOR | Domain logic and external side effects cannot be exercised separately. |
+| `common/nondeterministic-dependency` | MAJOR | Time, randomness, or global state is used without control. |
+| `common/complex-construction` | MAJOR | Construction performs work or requires excessive setup. |
+| `common/private-logic` | MINOR | Significant behavior is hidden behind an untestable private surface. |
+| `common/ignored-error` | BLOCKER | A failure is discarded and execution continues unsafely. |
+| `common/incomplete-error-handling` | MINOR | A recoverable failure is insufficiently checked, wrapped, or reported. |
+| `common/resource-leak` | BLOCKER | A resource is not released on all paths. |
+| `common/unmanaged-concurrency` | MAJOR | Concurrent work lacks lifecycle, cancellation, or error ownership. |
+| `common/weak-type-model` | MAJOR | Unstructured or overly broad types permit invalid states. |
+| `common/missing-timeout` | MINOR | External work has no bounded completion time. |
+| `common/graceful-shutdown` | NIT | Long-running work lacks an orderly shutdown path. |
+| `common/style-naming` | NIT | Naming conflicts with the language or repository convention. |
+| `common/style-readability` | NIT | A non-functional readability issue is not covered by automated formatting. |
+| `common/language-idiom` | NIT | Code ignores a clearly safer or simpler current language idiom. |
 
 ## Review Categories
 
@@ -149,6 +214,7 @@ Report each finding in this format, ordered by severity (BLOCKER first):
 ```
 ### [SEVERITY] <concise title>
 **File:** `path/to/file.ext:<line>`
+**Rule:** `<rule-id>`
 **Category:** <category> | **Principle:** <principle>
 
 <What's wrong and WHY it matters — 1-3 sentences.>
@@ -160,6 +226,9 @@ Report each finding in this format, ordered by severity (BLOCKER first):
 <refactored code>
 \`\`\`
 ```
+
+For an absence finding, such as a missing Dockerfile instruction, cite the file
+without a fabricated line number.
 
 ### Part 2: Summary Report
 
@@ -202,9 +271,10 @@ Follow this sequence:
 3. Load relevant language reference(s) from `references/`
 4. Read the diff carefully. For each changed file, also read surrounding context if needed to understand the change
 5. Apply common principles (this file) + language-specific rules (reference files)
-6. Produce findings in the output format above
-7. Produce the summary report with verdict
-8. If `--relaxed`, filter out NITs and non-pattern MINORs before outputting
+6. Resolve every finding to a catalogued Rule ID and its fixed severity
+7. Produce findings in the output format above
+8. Produce the summary report with verdict
+9. If `--relaxed`, filter out NITs and non-pattern MINORs before outputting
 
 ## Guidelines
 

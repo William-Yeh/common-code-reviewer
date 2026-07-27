@@ -1,0 +1,8 @@
+version: 1
+language: rust
+source: non_send_future.rs
+required:
+  - rule: rust/non-send-async-state
+    location: "4-6, 10"
+    rationale: Rc is held across await and the resulting non-Send future is spawned.
+forbidden: []

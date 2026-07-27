@@ -1,0 +1,53 @@
+version: 1
+language: java
+source: "OrderController.java"
+required:
+  - rule: common/sql-injection
+    location: "63-68"
+    rationale: "SQL injection via string concatenation in createOrder. User input directly concatenated into SQL. Use parameterized queries."
+  - rule: common/sql-injection
+    location: "84-85"
+    rationale: "SQL injection via string concatenation in searchOrders. Same pattern repeated."
+  - rule: common/incomplete-error-handling
+    location: "76"
+    rationale: "e.printStackTrace() instead of proper logging. In production, stack traces go to stderr and may be lost. Use SLF4J logger."
+  - rule: common/framework-coupling
+    location: "38"
+    rationale: "God class — OrderController acts as controller, service, and repository. Should separate into layered architecture."
+  - rule: common/dependency-inversion
+    location: "43-46"
+    rationale: "Field injection via @Autowired. Use constructor injection for testability and explicit dependency declaration."
+  - rule: common/weak-type-model
+    location: "13, 59, 81"
+    rationale: "JPA Entity used directly as @RequestBody and response. Exposes internal DB model to API consumers. Use DTOs (records)."
+  - rule: common/weak-type-model
+    location: "49, 52"
+    rationale: "Raw types: Map cache = new HashMap() and List getAllOrders() without generic parameters."
+  - rule: common/unbounded-query
+    location: "54"
+    rationale: "Unbounded JPQL query SELECT o FROM Order o with no pagination (setMaxResults, Pageable)."
+  - rule: common/missing-input-validation
+    location: "59"
+    rationale: "No @Valid on @RequestBody. No input validation constraints. Entity lacks Bean Validation annotations."
+  - rule: common/god-module
+    location: "21"
+    rationale: "double for monetary value price. Floating-point precision causes rounding errors. Use BigDecimal."
+  - rule: common/missing-timeout
+    location: "97-100"
+    rationale: "No timeout set on HttpURLConnection. No try-with-resources for streams. Connection/stream leak risk."
+  - rule: common/language-idiom
+    location: "13-34"
+    rationale: "Verbose entity class with manual getters/setters. Consider record for DTOs or Lombok @Data for entities (with caveats)."
+  - rule: common/incomplete-error-handling
+    location: "93"
+    rationale: "throws Exception — overly broad. Declare specific exception types."
+  - rule: common/incomplete-error-handling
+    location: "71"
+    rationale: "No @Transactional annotation on write operation. Read-after-write without transaction boundary."
+  - rule: common/language-idiom
+    location: "91"
+    rationale: ".collect(Collectors.toList()) — use .toList() (JDK 16+) for unmodifiable list."
+  - rule: common/shared-mutable-state
+    location: "49"
+    rationale: "HashMap cache without synchronization. Concurrent requests cause data races. Consider ConcurrentHashMap or proper caching solution."
+forbidden: []

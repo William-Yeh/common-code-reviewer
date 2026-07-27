@@ -2,6 +2,22 @@
 
 These rules supplement the common review framework. Apply them to `.rs` files.
 
+## Language-Owned Review Rules
+
+| Rule ID | Severity | Review Rule |
+|---|---|---|
+| `rust/panic-in-library` | BLOCKER | Library or recoverable code panics through `unwrap`, `expect`, `panic`, or an unfinished macro. |
+| `rust/blocking-in-async` | BLOCKER | Blocking filesystem, network, sleep, or CPU work runs on an async worker. |
+| `rust/lock-across-await` | BLOCKER | A lock guard remains held across an `.await`. |
+| `rust/unsafe-without-safety` | BLOCKER | Unsafe code lacks a valid safety invariant or permits undefined behavior. |
+| `rust/erased-public-error` | MAJOR | A public library interface erases actionable error variants. |
+| `rust/shared-mutex-overuse` | MINOR | `Arc<Mutex<_>>` introduces shared mutation without demonstrated ownership need. |
+| `rust/clone-to-compile` | MINOR | Owned values are cloned to bypass an unresolved ownership design. |
+| `rust/stringly-typed-domain` | MAJOR | Strings model a closed domain whose variants should be explicit. |
+| `rust/raw-domain-value` | NIT | A raw primitive represents a domain value that needs its own type. |
+| `rust/discarded-result` | BLOCKER | A `Result` is discarded and failure is allowed to continue. |
+| `rust/non-send-async-state` | MAJOR | State crossing async or thread seams violates required `Send` or `Sync` ownership. |
+
 ## Style Standard
 
 Follow the **Rust API Guidelines** and **Rust Style Guide** (the official standards). Additionally:

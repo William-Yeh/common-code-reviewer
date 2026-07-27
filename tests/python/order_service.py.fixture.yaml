@@ -1,0 +1,53 @@
+version: 1
+language: python
+source: "order_service.py"
+required:
+  - rule: common/sql-injection
+    location: "39-42"
+    rationale: "SQL injection via f-string in text(). User input directly interpolated into SQL. Use bound parameters."
+  - rule: common/sql-injection
+    location: "77-78"
+    rationale: "SQL injection via f-string in search_orders. Same pattern repeated."
+  - rule: common/sql-injection
+    location: "67"
+    rationale: "SQL injection inside N+1 loop — order.id interpolated into query string."
+  - rule: common/ignored-error
+    location: "47-48"
+    rationale: "Bare except: pass — catches and silently discards all exceptions including KeyboardInterrupt and SystemExit."
+  - rule: common/unnecessary-mutation
+    location: "19"
+    rationale: "Mutable default argument tags=[]. Shared across calls — will accumulate values."
+  - rule: common/n-plus-one-query
+    location: "65-69"
+    rationale: "N+1 query pattern: executing a query per order inside a loop. Use a JOIN or selectinload."
+  - rule: common/unbounded-query
+    location: "62"
+    rationale: "Unbounded SELECT * FROM orders with no LIMIT or pagination."
+  - rule: common/god-module
+    location: "35"
+    rationale: "God function create_order — does input handling, raw SQL, caching, notification, and validation in one function."
+  - rule: common/missing-input-validation
+    location: "35"
+    rationale: "body: dict instead of a Pydantic BaseModel. No input validation, no schema, no OpenAPI docs."
+  - rule: common/blocking-in-async
+    location: "84-88"
+    rationale: "Synchronous requests.post() in a function called from async route. Blocks the event loop. Use httpx or aiohttp."
+  - rule: common/shared-mutable-state
+    location: "14"
+    rationale: "Module-level mutable order_cache = {} — shared mutable state across requests."
+  - rule: common/magic-literal
+    location: "52"
+    rationale: "Magic number 500 — no explanation of business significance."
+  - rule: common/language-idiom
+    location: "90"
+    rationale: "print() in production code — use structured logging."
+  - rule: common/language-idiom
+    location: "89"
+    rationale: "HTTP response status not checked. Failures pass silently."
+  - rule: common/missing-timeout
+    location: "85"
+    rationale: "No timeout on requests.post() — can hang indefinitely."
+  - rule: common/incomplete-error-handling
+    location: "26, 83"
+    rationale: "Missing type hints on public functions get_db and notify_warehouse."
+forbidden: []
