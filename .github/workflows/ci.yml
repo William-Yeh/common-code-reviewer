@@ -5,10 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
   workflow_dispatch:
     inputs:
-      run_review_tests:
-        description: "Run LLM review accuracy tests"
+      run_conformance:
+        description: "Run live Claude Code conformance"
         type: boolean
         default: false
 
@@ -23,19 +25,54 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Validate structure
-        run: python tests/scripts/validate_structure.py
+      - name: Install uv
+        run: python -m pip install uv
 
-  review-tests:
-    name: Review Accuracy Tests
+      - name: Validate skill and deterministic conformance
+        run: uv run tests/scripts/validate_structure.py
+
+      - name: Test conformance matcher
+        run: uv run tests/scripts/test_conformance.py
+
+  live-conformance:
+    name: Live Claude Code Conformance
     runs-on: ubuntu-latest
     if: >-
-      github.event_name == 'workflow_dispatch' &&
-      github.event.inputs.run_review_tests == 'true'
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.run_conformance == 'true')
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DISABLE_AUTOUPDATER: "1"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Placeholder
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install uv
+
+      - name: Require Anthropic credentials
+        run: test -n "$ANTHROPIC_API_KEY"
+
+      - name: Install Claude Code
         run: |
-          echo "LLM review accuracy tests require an API key and are run on-demand."
-          echo "See tests/ for sample files and expected findings."
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run live conformance
+        run: >-
+          uv run tests/scripts/run_conformance.py
+          --model sonnet
+          --max-budget-usd 0.50
+          --report conformance-report.json
+
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-code-conformance
+          path: conformance-report.json
+          if-no-files-found: warn

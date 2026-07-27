@@ -1,0 +1,71 @@
+version: 1
+language: java
+source: "PaymentService.java"
+required:
+  - rule: common/command-injection
+    location: "171-173"
+    rationale: "ProcessBuilder(\"sh\", \"-c\", \"payment-export --format \" + format) — unsanitized format parameter passed to shell. Use ProcessBuilder with argument list, no shell."
+  - rule: common/sensitive-data-exposure
+    location: "87"
+    rationale: "Credit card number logged via System.out.println. PCI-DSS violation — card numbers must never be logged in plain text."
+  - rule: common/ignored-error
+    location: "117"
+    rationale: "Empty catch block in calculateFee — IOException silently swallowed. Fee log failure goes unnoticed."
+  - rule: common/open-closed-violation
+    location: "71"
+    rationale: "processPayment uses switch on payment method string. Every new method requires modifying this function. Use strategy pattern or polymorphism."
+  - rule: common/liskov-violation
+    location: "47-49"
+    rationale: "LegacyGateway.pay() returns null for large amounts. Base class contract says \"never returns null; throws on failure.\" Callers get NullPointerException."
+  - rule: common/interface-segregation
+    location: "14-21"
+    rationale: "PaymentProcessor interface has 7 methods. A refund-only implementation must stub 5 unrelated methods. Split into focused interfaces."
+  - rule: common/complex-construction
+    location: "60-63"
+    rationale: "PaymentService directly creates HttpURLConnection in constructor. Domain logic tightly coupled to HTTP infrastructure. Inject a gateway client."
+  - rule: common/anemic-domain
+    location: "157-165"
+    rationale: "Payment class is a pure data bag with public mutable fields. All behavior lives in PaymentService. Move validation and state transitions into domain object."
+  - rule: common/hidden-side-effect
+    location: "111-116"
+    rationale: "calculateFee writes to filesystem. Function name implies pure calculation. Extract logging side effect."
+  - rule: common/nondeterministic-dependency
+    location: "121"
+    rationale: "isWithinRefundWindow uses LocalDateTime.now() directly. Non-deterministic — inject a Clock."
+  - rule: common/hard-coded-dependency
+    location: "126"
+    rationale: "loadGatewayConfig hardcodes /etc/payments/gateway.properties. Cannot test without real filesystem. Inject path or config object."
+  - rule: common/authorization-gap
+    location: "169"
+    rationale: "exportAll has no authorization check. Any caller can export all payment transactions."
+  - rule: common/deep-nesting
+    location: "80-88"
+    rationale: "Deep nesting — 3 levels of if inside switch case. Flatten with early returns or extract validation."
+  - rule: common/magic-literal
+    location: "106"
+    rationale: "Magic numbers 0.029 and 0.30 — credit card processing fees should be named constants."
+  - rule: common/duplicated-logic
+    location: "140"
+    rationale: "Code duplication — amount validation amt <= 0 \\|\\| amt >= 100000 repeated from processPayment. Extract shared validation."
+  - rule: common/dead-code
+    location: "143"
+    rationale: "Dead code — debugTimestamp computed but never used."
+  - rule: common/unclear-name
+    location: "153-154"
+    rationale: "Bad naming: Util.process, data, t, res, d, a — none reveal intent."
+  - rule: common/mixed-abstraction
+    location: "136"
+    rationale: "Mixed abstraction levels — refund does config loading, validation, and response building in one method."
+  - rule: common/incomplete-error-handling
+    location: "129"
+    rationale: "e.printStackTrace() in production — use SLF4J logger."
+  - rule: common/resource-leak
+    location: "114"
+    rationale: "FileWriter not wrapped in try-with-resources. Resource leak if write() throws."
+  - rule: common/weak-type-model
+    location: "160, 162"
+    rationale: "String method and String status — use enums or sealed types."
+  - rule: common/weak-type-model
+    location: "161"
+    rationale: "double amount for money — use BigDecimal."
+forbidden: []

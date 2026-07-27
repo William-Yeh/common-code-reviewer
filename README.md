@@ -19,14 +19,16 @@ An Agent Skill that performs rigorous code review as a principal engineer with 1
 
 ## Supported Languages
 
+<!-- BEGIN GENERATED LANGUAGES -->
 | Language | Frameworks | Style Standard |
 |---|---|---|
 | TypeScript/JavaScript | React, NestJS, Next.js App Router | ESLint / Airbnb |
 | Python | FastAPI, SQLAlchemy | PEP 8 / 484 / 585 |
 | Java | Spring Boot, Quarkus | Google Java Style |
 | Go | stdlib, Gin, gRPC | Effective Go |
-| Rust | std, Tokio (async) | Rust API Guidelines / Clippy |
+| Rust | std, Tokio | Rust API Guidelines / Clippy |
 | Dockerfile | Docker, BuildKit, multi-stage builds | Docker best practices |
+<!-- END GENERATED LANGUAGES -->
 
 ## Installation
 
@@ -85,6 +87,7 @@ Compatible with any AI agent that supports the [Agent Skills spec](https://agent
 common-code-reviewer/
 ├── skill/                # Agent-installable skill artifact
 │   ├── SKILL.md          # Skill definition (review rules + process)
+│   ├── languages.yaml    # Canonical language and detection registry
 │   └── references/       # Language-specific rules (loaded on demand)
 │       ├── typescript.md
 │       ├── python.md
@@ -93,9 +96,9 @@ common-code-reviewer/
 │       ├── rust.md
 │       └── dockerfile.md
 ├── tests/
-│   ├── COVERAGE.md       # Rule coverage matrix
-│   ├── scripts/          # CI validation scripts
-│   ├── typescript/       # TS test samples + expected findings
+│   ├── COVERAGE.md       # Generated Review Rule evidence
+│   ├── scripts/          # Validation and live conformance modules
+│   ├── typescript/       # Source + Conformance Fixtures
 │   ├── python/
 │   ├── java/
 │   ├── go/
@@ -108,29 +111,61 @@ common-code-reviewer/
 
 To add a new language:
 
-1. Create `references/<language>.md` following the structure of existing references
-2. Add the language to the detection table in `SKILL.md`
-3. Add test samples under `tests/<language>/`
-4. Update `tests/COVERAGE.md`
+1. Create `references/<language>.md` following the existing Language References
+2. Add one entry to `skill/languages.yaml`
+3. Add source and `*.fixture.yaml` pairs under `tests/<language>/`
+4. Run `uv run tests/scripts/sync_generated.py`
+
+Every language-specific Review Rule must have required fixture evidence.
 
 ## Tests
 
-**Structural validation** — checks spec compliance (frontmatter, references, links):
+Development scripts declare runtime dependencies with PEP 723 inline metadata.
+Install [`uv`](https://docs.astral.sh/uv/) once; `uv run` creates and reuses an
+isolated environment for each script.
+
+**Deterministic conformance** — validates the language registry, generated tables,
+Review Rule catalog, fixture semantics, detection patterns, and derived coverage:
 
 ```bash
-python tests/scripts/validate_structure.py
+uv run tests/scripts/validate_structure.py
 ```
 
-**Review accuracy** — runs the skill against intentionally flawed samples and compares against expected findings. See `tests/COVERAGE.md` for the full rule coverage matrix (91%, 64/70 rules).
+<!-- BEGIN GENERATED COVERAGE -->
+The Conformance Fixtures cover **79/79 Review Rules (100%)**. See
+`tests/COVERAGE.md` for the derived evidence.
+<!-- END GENERATED COVERAGE -->
+
+**Live conformance** — invokes Claude Code read-only against every fixture. It is
+manual/scheduled because model behavior is probabilistic and requires credentials:
+
+```bash
+uv run tests/scripts/run_conformance.py --model sonnet
+```
 
 ## Changelog
+
+### v1.3.0 (2026-07-27)
+
+- Added an explicit **Review Rule Catalog** to `skill/SKILL.md` — every finding-producing
+  instruction now resolves to a catalogued rule ID with a fixed severity. Rule IDs and
+  severities are part of the skill's interface (see ADR-0003)
+- Migrated Conformance Fixtures from prose `expected-*.md` files to canonical
+  `*.fixture.yaml`, enabling semantic recall-oriented matching by rule identity, file,
+  and location rather than exact prose
+- Added `tests/scripts/sync_generated.py` (generates language tables and coverage blocks)
+  and `tests/scripts/run_conformance.py` (read-only live conformance runs against
+  Claude Code); rewrote `validate_structure.py` around the canonical registry
+- Rule coverage: **79/79 rules (100%)** — 53 common, 11 Rust, 15 Dockerfile
+- Recorded accepted `agent-skill-linter` semantic deviations in ADR-0004
 
 ### v1.2.0 (2026-06-24)
 
 - Added Rust review rules (`skill/references/rust.md`) — covering `.unwrap()`/`panic` in libraries, ownership/clone smells, `unsafe`/SAFETY, error-type design (`Box<dyn Error>` vs typed enums), and async hazards (blocking-in-async, lock-across-`.await`)
 - Added two Rust test fixtures with expected findings (`tests/rust/`)
 - Closed two previously-uncovered general rules via Rust idioms: *unnecessary allocations in hot paths* and *missing Result/Option types*
-- Rule coverage: 86% → 91% (64/70 rules)
+- Rule coverage: 86% → 91% (64/70 rules) — counted under the pre-catalog rule
+  accounting; superseded by the canonical catalog introduced in v1.3.0
 - Refreshed existing language references for current toolchains: fixed an incorrect PEP 657 citation (now PEP 695 — `type` statement / inline generics) and added Python 3.14 notes (t-strings); refreshed Java to the 25 LTS (scoped values, primitive patterns, flexible constructor bodies); added Go 1.25 (`WaitGroup.Go`, `testing/synctest`), TypeScript `isolatedDeclarations`, and a BuildKit cache-mount note for Dockerfile
 
 ### v1.1.0 (2026-04-08)

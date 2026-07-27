@@ -1,0 +1,38 @@
+version: 1
+language: typescript
+source: architecture-gaps.ts
+required:
+  - rule: common/circular-dependency
+    location: "1"
+    rationale: architecture-gaps and cycle-peer import each other.
+  - rule: common/framework-coupling
+    location: "2, 9"
+    rationale: Core review behavior constructs an Express application directly.
+  - rule: common/insecure-default
+    location: "10"
+    rationale: Wildcard CORS is combined with credentialed requests.
+  - rule: common/unsafe-deserialization
+    location: "12-14"
+    rationale: Untrusted input is passed to node-serialize unserialize.
+  - rule: common/eager-loading
+    location: "16-23"
+    rationale: Every customer query eagerly loads several unbounded relationships.
+  - rule: common/inefficient-data-structure
+    location: "25-27"
+    rationale: Array membership inside filter makes intersection quadratic.
+  - rule: common/coupled-side-effect
+    location: "29-33"
+    rationale: Calculation and filesystem persistence cannot be exercised separately.
+  - rule: common/missing-cache
+    location: "35-44"
+    rationale: Expensive stable lookups are recomputed for repeated keys.
+  - rule: common/missing-abstraction
+    location: "46-54"
+    rationale: Payment-kind dispatch is duplicated across charge and refund.
+  - rule: common/private-logic
+    location: "56-65"
+    rationale: Significant scoring behavior is exposed only through a private method.
+  - rule: common/style-readability
+    location: "67-69"
+    rationale: Redundant coercion, comparison, and ternary obscure a boolean value.
+forbidden: []

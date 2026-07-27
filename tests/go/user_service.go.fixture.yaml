@@ -1,0 +1,65 @@
+version: 1
+language: go
+source: "user_service.go"
+required:
+  - rule: common/command-injection
+    location: "160-162"
+    rationale: "exec.Command(\"sh\", \"-c\", ...) with unsanitized username and format. Use exec.Command(\"user-export\", \"--user\", username, \"--format\", format) without shell."
+  - rule: common/path-traversal
+    location: "167"
+    rationale: "User-controlled userID used directly in file path. Attacker can read arbitrary files. Sanitize or validate format."
+  - rule: common/authorization-gap
+    location: "171-172"
+    rationale: "DeleteUser has no authorization check. Any caller can delete any user."
+  - rule: common/open-closed-violation
+    location: "34-51"
+    rationale: "HandleUserAction uses switch on action string. Every new action requires modifying this function. Use a map of action → handler function."
+  - rule: common/unhandled-variant
+    location: "34-51"
+    rationale: "No default case — unknown actions silently return nil. Should return an error for unrecognized actions."
+  - rule: common/interface-segregation
+    location: "19-28"
+    rationale: "UserStore interface has 8 methods. A read-only consumer must implement Delete, BulkImport, ExportCSV, etc. Split into UserReader, UserWriter, UserReporter."
+  - rule: common/anemic-domain
+    location: "56-64"
+    rationale: "User struct is a pure data bag. All behavior (activation, deactivation, counting, reporting) lives in external functions."
+  - rule: common/hidden-side-effect
+    location: "77-81"
+    rationale: "CountActiveUsers writes to filesystem and sends HTTP request. Function name implies pure counting. Extract side effects."
+  - rule: common/nondeterministic-dependency
+    location: "91"
+    rationale: "IsInactive uses time.Since (depends on time.Now() internally). Non-deterministic. Accept a now time.Time parameter or inject a clock."
+  - rule: common/hard-coded-dependency
+    location: "95-96"
+    rationale: "LoadConfig hardcodes /etc/app/users.json. Cannot test without real filesystem. Accept a path or io.Reader."
+  - rule: common/ignored-error
+    location: "101"
+    rationale: "json.Unmarshal error ignored. Malformed config silently produces zero-value map."
+  - rule: common/deep-nesting
+    location: "107-116"
+    rationale: "Deep nesting — 4 levels of if in DeactivateInactive. Flatten with continue or extract a shouldDeactivate function."
+  - rule: common/ignored-error
+    location: "121"
+    rationale: "LoadConfig error ignored with _. Config loading failure silently produces nil map, causing panics downstream."
+  - rule: common/duplicated-logic
+    location: "124-130"
+    rationale: "Code duplication — role-counting via if/else chain. Use a map counter: counts[u.Role]++."
+  - rule: common/mixed-abstraction
+    location: "120"
+    rationale: "Mixed abstraction levels — GenerateReport does config loading, counting, formatting, and file I/O in one function."
+  - rule: common/unclear-name
+    location: "141-142"
+    rationale: "Bad naming: proc, d, f, r, x. Not intention-revealing."
+  - rule: common/dead-code
+    location: "150-152"
+    rationale: "Dead code: oldNotify function never called. Remove it."
+  - rule: common/duplicated-logic
+    location: "147"
+    rationale: "Duplicated email validation — same check could be extracted into a shared function."
+  - rule: common/weak-type-model
+    location: "61, 62"
+    rationale: "Role string and Status string — define typed constants or use a custom type with iota."
+  - rule: common/language-idiom
+    location: "36-49"
+    rationale: "fmt.Println for logging — use slog for structured logging (Go 1.21+)."
+forbidden: []

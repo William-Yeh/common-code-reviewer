@@ -1,0 +1,43 @@
+languages:
+  - id: typescript
+    name: TypeScript/JavaScript
+    reference: references/typescript.md
+    extensions: [.ts, .tsx, .js, .jsx]
+    filenames: []
+    frameworks: [React, NestJS, Next.js App Router]
+    style: ESLint / Airbnb
+  - id: python
+    name: Python
+    reference: references/python.md
+    extensions: [.py, .pyi]
+    filenames: []
+    frameworks: [FastAPI, SQLAlchemy]
+    style: PEP 8 / 484 / 585
+  - id: java
+    name: Java
+    reference: references/java.md
+    extensions: [.java]
+    filenames: []
+    frameworks: [Spring Boot, Quarkus]
+    style: Google Java Style
+  - id: go
+    name: Go
+    reference: references/go.md
+    extensions: [.go]
+    filenames: []
+    frameworks: [stdlib, Gin, gRPC]
+    style: Effective Go
+  - id: rust
+    name: Rust
+    reference: references/rust.md
+    extensions: [.rs]
+    filenames: []
+    frameworks: [std, Tokio]
+    style: Rust API Guidelines / Clippy
+  - id: dockerfile
+    name: Dockerfile
+    reference: references/dockerfile.md
+    extensions: []
+    filenames: [Dockerfile, "Dockerfile.*", "*.dockerfile"]
+    frameworks: [Docker, BuildKit, multi-stage builds]
+    style: Docker best practices

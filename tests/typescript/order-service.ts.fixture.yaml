@@ -1,0 +1,47 @@
+version: 1
+language: typescript
+source: "order-service.ts"
+required:
+  - rule: common/sql-injection
+    location: "30-32"
+    rationale: "SQL injection via string interpolation in createOrder. User input directly embedded in SQL query."
+  - rule: common/sql-injection
+    location: "49-51"
+    rationale: "SQL injection via string interpolation in searchOrders. Same pattern repeated."
+  - rule: common/ignored-error
+    location: "37"
+    rationale: "Empty catch block catch (e) {} silently swallows warehouse notification failure."
+  - rule: common/god-module
+    location: "13"
+    rationale: "God controller — mixes HTTP handling, business logic, data access, and caching in a single class. Should separate into Controller → Service → Repository layers."
+  - rule: common/dependency-inversion
+    location: "16-17"
+    rationale: "Field injection via @Inject() — should use constructor injection for testability and explicit dependencies."
+  - rule: common/weak-type-model
+    location: "10, 42, 56, 67"
+    rationale: "any type used in multiple places: orderCache, body parameters, results array, notifyWarehouse parameter. Disables type safety."
+  - rule: common/interface-segregation
+    location: "25"
+    rationale: "No DTO or validation on @Body() body — raw request body with no type checking or constraint validation."
+  - rule: common/unbounded-query
+    location: "21"
+    rationale: "Unbounded SELECT * FROM orders with no LIMIT or pagination. Will OOM on large tables."
+  - rule: common/shared-mutable-state
+    location: "10"
+    rationale: "Module-level mutable let orderCache — shared mutable state across requests."
+  - rule: common/imperative-transformation
+    location: "56-62"
+    rationale: "forEach with side effect (pushing to external array). Should use map to transform."
+  - rule: common/magic-literal
+    location: "35"
+    rationale: "Magic number 500 — no explanation of why this threshold triggers warehouse notification."
+  - rule: common/language-idiom
+    location: "72"
+    rationale: "fetch response not checked for HTTP errors. Failures will pass silently."
+  - rule: common/incomplete-error-handling
+    location: "69"
+    rationale: "console.log in production code. Should use structured logger."
+  - rule: common/style-naming
+    location: "13"
+    rationale: "Default export — prefer named export for refactoring safety and IDE support."
+forbidden: []
