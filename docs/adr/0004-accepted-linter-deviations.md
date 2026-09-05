@@ -66,3 +66,12 @@ body-length pressure forcing the split.
   if the catalog itself grows enough that always-loaded cost exceeds the cost of
   one extra read. A partial extraction — BLOCKER rules inline, the rest in
   `references/` — was considered and remains the preferred fallback.
+
+## Amendment (2026-09-05)
+
+v1.4.0 added the Change Risk section and three catalog rules (ADR-0005), taking
+SKILL.md from 286 to 355 lines. Deviation 2 still holds for the same reason: the
+Change Risk calculation, like the catalog, runs on every invocation, so it has no
+conditional skip path that would justify extraction. The language-specific
+Scoring Profiles went to `references/` where they belong. The 500-line threshold
+is not yet approached; the partial-extraction fallback remains the plan if it is.

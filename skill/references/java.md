@@ -114,3 +114,43 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 - **Over-abstraction**: `AbstractBaseService<T>` with a single implementation — YAGNI. Create abstractions when the second use case arrives.
 - **Ignoring `java.time`**: Using `Date`, `Calendar`, `Timestamp` in new code. Always use `java.time` types.
 - **Mutable `ThreadLocal` for context**: On Java 25+, prefer immutable `ScopedValue` for request/task-scoped context — it has clearer lifetime semantics and works cleanly with virtual threads and structured concurrency. Flag `ThreadLocal` set-and-forget that risks leaking across pooled threads.
+
+## Change Risk
+
+### Scored Units
+
+Methods and constructors, including static methods, default interface methods,
+and methods of named nested or inner classes. Lambdas and anonymous-class method
+bodies fold into the enclosing unit. Not scored, having no body: abstract
+methods, interface signatures, `native` methods.
+
+### Decision Points
+
+| Category | Java |
+|---|---|
+| Branch | `if`, `else if` |
+| Loop | `for`, enhanced `for`, `while`, `do` |
+| Case arm | each `case` label or arrow arm in switch statements and expressions; `default` free |
+| Exception handler | each `catch` |
+| Short-circuit operator | `&&`, `\|\|` |
+| Conditional expression | `?:` |
+| Early-return operator | none |
+
+Not counted: `else`, `finally`, `throw`, try-with-resources.
+
+### Test Files
+
+Anything under `src/test/`, plus `*Test.java`, `*Tests.java`, `*IT.java`.
+
+### Coverage Evidence
+
+JaCoCo XML: Maven writes `target/site/jacoco/jacoco.xml`, Gradle writes
+`build/reports/jacoco/test/jacocoTestReport.xml`. Each `<method>` carries `LINE`
+and `COMPLEXITY` counters; cov is `LINE covered / (missed + covered)`, and
+`COMPLEXITY missed + covered` is a bytecode CC usable as a cross-check.
+
+### Oracle Deviations
+
+`lizard` and PMD `CyclomaticComplexity` match this profile. JaCoCo reports each
+lambda as a separate synthetic `lambda$` method, so its CC for the enclosing
+method runs lower.

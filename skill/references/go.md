@@ -129,3 +129,42 @@ Go concurrency requires careful review:
 - **Error string matching**: `if err.Error() == "not found"` — fragile. Use sentinel errors or `errors.Is`.
 - **Pointer overuse**: Using `*Foo` everywhere "for performance." Value semantics are often faster (less GC pressure) and safer for small structs.
 - **Missing graceful shutdown**: `http.ListenAndServe` without signal handling. Use `signal.NotifyContext` + `server.Shutdown(ctx)`.
+
+## Change Risk
+
+### Scored Units
+
+`func` declarations and methods. Function literals fold into the enclosing
+unit. Interface method sets have no body and are not scored.
+
+### Decision Points
+
+| Category | Go |
+|---|---|
+| Branch | `if`, `else if` |
+| Loop | every `for` form |
+| Case arm | each `case` in `switch`, type switch, and `select`; `default` free |
+| Exception handler | none |
+| Short-circuit operator | `&&`, `\|\|` |
+| Conditional expression | none |
+| Early-return operator | none |
+
+Not counted: `else`, `defer`, `go`, `goto`, labels. `if err != nil` is an
+ordinary branch.
+
+### Test Files
+
+`*_test.go` and anything under `testdata/`.
+
+### Coverage Evidence
+
+`go test -coverprofile=coverage.out ./...` writes a coverprofile. Each line is
+`file:startLine.col,endLine.col statements count`; blocks with count 0 inside the
+unit's range are uncovered, and cov is covered statements over statements.
+`gocover-cobertura` converts it to Cobertura when a team prefers that.
+
+### Oracle Deviations
+
+gocyclo matches this profile exactly. `lizard` scores function literals as
+separate anonymous units, so its CC for the enclosing function runs lower on
+callback-heavy code.

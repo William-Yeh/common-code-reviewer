@@ -3,51 +3,51 @@ language: rust
 source: "order_handler.rs"
 required:
   - rule: common/sql-injection
-    location: "8-9"
+    location: "9"
     rationale: "format!(\"... id = '{}'\", order_id) interpolates user input into SQL. Use parameterized queries (sqlx::query! / bind parameters)."
   - rule: common/sql-injection
-    location: "18"
+    location: "17"
     rationale: "status concatenated into the query string. Same fix — bind parameters, never format!."
   - rule: common/command-injection
-    location: "26-30"
+    location: "25-27"
     rationale: "sh -c \"invoice-gen --order {order_id}\" runs user input through a shell. Pass args directly: Command::new(\"invoice-gen\").args([\"--order\", order_id]), no sh -c."
   - rule: common/path-traversal
-    location: "35-36"
+    location: "35"
     rationale: "User-controlled file_name joined into a path. ../../etc/passwd escapes the dir. Validate/canonicalize and confirm the path stays under /var/receipts."
   - rule: rust/panic-in-library
     location: "11"
     rationale: ".unwrap() on a fallible DB call in library code panics the caller's process. Return Result<Order, _> and propagate with ?."
   - rule: rust/panic-in-library
-    location: "28, 31, 37, 67"
+    location: "29, 30, 36, 74"
     rationale: "Pervasive .unwrap()/.expect() on fallible operations (command output, UTF-8, fs read, DB save). Each is a latent panic. Return Result."
   - rule: rust/blocking-in-async
-    location: "71-73"
+    location: "65"
     rationale: "std::fs::read_to_string is a blocking syscall inside async fn — it stalls the runtime worker thread. Use tokio::fs or spawn_blocking."
   - rule: rust/lock-across-await
-    location: "62-66"
+    location: "57-60"
     rationale: "state.lock() guard is held across db.flush_metrics().await. With a std Mutex this blocks the executor and risks deadlock. Drop the guard before awaiting, or use tokio::sync::Mutex scoped tightly."
   - rule: common/n-plus-one-query
-    location: "52-57"
+    location: "42-46"
     rationale: "One query_one per order inside the loop. Batch with a single WHERE customer_id IN (...) query."
   - rule: common/unbounded-query
-    location: "18-20"
+    location: "17-19"
     rationale: "orders_by_status has no LIMIT/pagination — loads the entire matching set into memory."
   - rule: common/god-module
-    location: "76-85"
+    location: "69-77"
     rationale: "process_order validates, charges payment, persists, and emails. Four responsibilities. Split into focused units."
   - rule: rust/discarded-result
-    location: "81"
+    location: "73"
     rationale: "let _ = charge_card(&order); discards the payment Result. A failed charge proceeds to save+confirm as success."
   - rule: common/sensitive-data-exposure
-    location: "89"
+    location: "81"
     rationale: "Full card_number written to stdout/logs. Mask all but the last 4 digits, or omit."
   - rule: common/hot-path-allocation
-    location: "58"
+    location: "48"
     rationale: "order.clone() clones an owned Order every iteration. Restructure to move or borrow instead of cloning in the hot loop."
   - rule: common/erased-failure
-    location: "77-78"
+    location: "69-71"
     rationale: "process_order returns bool, erasing the failure reason. Return Result<(), OrderError> so callers know *why* it failed."
   - rule: common/magic-literal
-    location: "95"
+    location: "87"
     rationale: "30 (stale threshold in days) is unexplained. Extract const STALE_AFTER_DAYS: u64 = 30;."
 forbidden: []

@@ -123,3 +123,45 @@ Do not flag style issues that ESLint/Prettier would catch. Only flag style when 
 - **String-typed APIs**: Using `string` for IDs, statuses, types — use branded types or unions
 - **Callback hell in legacy code being modified**: If touching it, refactor to async/await
 - **Default exports**: Prefer named exports for refactoring safety and IDE support
+
+## Change Risk
+
+### Scored Units
+
+Function declarations, methods, constructors, getters and setters, and function
+or arrow expressions bound to a named `const`, `let`, class field, or object
+property. Inline callbacks and IIFEs fold into the enclosing unit. Not scored,
+having no body: overload signatures, `declare`, `abstract`, interface and type
+members.
+
+### Decision Points
+
+| Category | TypeScript / JavaScript |
+|---|---|
+| Branch | `if`, `else if` |
+| Loop | `for`, `for...of`, `for...in`, `while`, `do` |
+| Case arm | each `case`; `default` free |
+| Exception handler | `catch` |
+| Short-circuit operator | `&&`, `\|\|`, `??`, `&&=`, `\|\|=`, `??=` |
+| Conditional expression | `?:` |
+| Early-return operator | none |
+
+Not counted: `else`, `finally`, `?.`, optional and default parameters, default
+destructuring values.
+
+### Test Files
+
+`*.test.*`, `*.spec.*`, `*.stories.*`, and anything under `__tests__/`,
+`__mocks__/`, `cypress/`, or `e2e/`.
+
+### Coverage Evidence
+
+Vitest (`--coverage.reporter=lcov`), Jest (`--coverageReporters=lcov`), c8, and
+nyc all write `coverage/lcov.info`; the lines inside the unit's range give cov.
+
+### Oracle Deviations
+
+`lizard` reports `??` as +2 (it tokenises it as two `?`) and scores inline arrow
+functions as separate anonymous units. ESLint `complexity` additionally counts
+`?.`, default parameters, and default destructuring values, so its CC runs
+higher.

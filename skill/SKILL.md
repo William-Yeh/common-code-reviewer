@@ -4,7 +4,7 @@ description: Use when the user asks to review code, audit changes, or review a P
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Code Review
@@ -43,14 +43,14 @@ Only review changed lines and their immediate context. Do not review unchanged c
 Detect languages from extension and filename patterns in the diff:
 
 <!-- BEGIN GENERATED LANGUAGES -->
-| Patterns | Language | Reference |
-|---|---|---|
-| `.ts`, `.tsx`, `.js`, `.jsx` | TypeScript/JavaScript | [references/typescript.md](references/typescript.md) |
-| `.py`, `.pyi` | Python | [references/python.md](references/python.md) |
-| `.java` | Java | [references/java.md](references/java.md) |
-| `.go` | Go | [references/go.md](references/go.md) |
-| `.rs` | Rust | [references/rust.md](references/rust.md) |
-| `Dockerfile`, `Dockerfile.*`, `*.dockerfile` | Dockerfile | [references/dockerfile.md](references/dockerfile.md) |
+| Patterns | Language | Reference | Change Risk |
+|---|---|---|---|
+| `.ts`, `.tsx`, `.js`, `.jsx` | TypeScript/JavaScript | [references/typescript.md](references/typescript.md) | scored |
+| `.py`, `.pyi` | Python | [references/python.md](references/python.md) | scored |
+| `.java` | Java | [references/java.md](references/java.md) | scored |
+| `.go` | Go | [references/go.md](references/go.md) | scored |
+| `.rs` | Rust | [references/rust.md](references/rust.md) | scored |
+| `Dockerfile`, `Dockerfile.*`, `*.dockerfile` | Dockerfile | [references/dockerfile.md](references/dockerfile.md) | not scored |
 <!-- END GENERATED LANGUAGES -->
 
 Load the corresponding reference file(s) for all detected languages before starting the review. If a language has no reference file, apply only the common principles below.
@@ -112,6 +112,9 @@ uncataloged guidance.
 | `common/magic-literal` | MINOR | An unexplained literal carries domain or operational meaning. |
 | `common/dead-code` | MINOR | Unreachable, unused, or commented-out code remains in the change. |
 | `common/deep-nesting` | MINOR | Control flow is nested deeply enough to obscure behavior. |
+| `common/critical-change-risk` | MAJOR | A touched function's CRAP Score exceeds 30. |
+| `common/elevated-change-risk` | MINOR | A touched function's CRAP Score exceeds 8 but not 30. |
+| `common/excess-complexity` | MINOR | A touched function's cyclomatic complexity exceeds 6 while its CRAP Score stays at or under 8. |
 | `common/duplicated-logic` | MINOR | Repeated logic represents one concept that should change together. |
 | `common/hard-coded-dependency` | MAJOR | Behavior constructs or fixes a dependency that tests must replace. |
 | `common/coupled-side-effect` | MAJOR | Domain logic and external side effects cannot be exercised separately. |
@@ -188,6 +191,7 @@ Look for:
 - Magic numbers and strings — unexplained literals
 - Dead code, commented-out code, unreachable branches
 - Deep nesting (3+ levels) — the arrow anti-pattern
+- Change risk — complex functions without Coverage Evidence (see Change Risk below)
 - Code duplication that indicates a missing abstraction (not just coincidental similarity)
 
 **Testability** — look for:
@@ -204,6 +208,56 @@ Look for:
 - Minor readability improvements
 
 Only report Style findings as NIT.
+
+## Change Risk
+
+Score every named function or method with a body that the change touches,
+constructors included. Anonymous closures, lambdas, and function literals fold
+into the enclosing unit; named nested functions score on their own. Never score
+test files, or any language whose Language Detection row says "not scored".
+Each scored language's reference ends with a Scoring Profile of five slots:
+Scored Units, Decision Points, Test Files, Coverage Evidence, and Oracle
+Deviations. Read it before scoring.
+
+**Cyclomatic complexity (CC)** = 1 + decision points:
+
+| Category | Counts | Never counts |
+|---|---|---|
+| Branch | `if`, `else if` / `elif`, `if let` | `else` |
+| Loop | each loop header, including comprehension loops | unconditional `loop` |
+| Case arm | each arm of a switch or match | the default or wildcard arm |
+| Exception handler | each `catch` / `except` | `finally` |
+| Short-circuit operator | `&&`, `\|\|`, `??`, `and`, `or` | optional chaining, optional or default parameters |
+| Conditional expression | ternary, inline `if` expression | |
+| Early-return operator | Rust `?` | |
+
+**Coverage (cov)** is covered lines over executable lines within the unit's
+range, taken only from Coverage Evidence that already exists in the workspace:
+LCOV (`lcov.info`, `coverage.lcov`), Cobertura (`coverage.xml`), JaCoCo XML, or a
+Go coverprofile (`coverage.out`). Look for it once per review. Never run tests or
+tools to produce it. When no evidence exists, or the report is visibly older than
+the source it describes, use 0% and label the score **worst case**.
+
+**CRAP Score** = CC² × (1 − cov)³ + CC. A human can reproduce CC with
+`uvx lizard <file>`; the Scoring Profile lists where it deviates.
+
+| Rule | Fires when |
+|---|---|
+| `common/critical-change-risk` | CRAP Score > 30, reported as MAJOR |
+| `common/elevated-change-risk` | 8 < CRAP Score ≤ 30, reported as MINOR |
+| `common/excess-complexity` | CC > 6 and CRAP Score ≤ 8, reported as MINOR |
+
+At most one of these three rules fires per unit; every other catalogued rule
+still applies to that unit independently. `excess-complexity` is the signal that tests cannot hide
+complexity: it fires only on units whose coverage already keeps the CRAP Score
+low. A worst-case score fires a rule exactly as a measured score does; the Basis
+column of the Risk Report carries the caveat, not the finding. Decide the rule
+for every scored unit, one by one, before writing findings.
+
+Findings for these rules use Category Implementation and Principle "Change Risk
+(CRAP)", cite the unit's declaration line, and state CC, cov (or "worst case"),
+and the CRAP Score in the body. Reduce risk by adding tests to raise cov or by
+splitting the unit to lower CC; suggest whichever the code makes easier.
 
 ## Output Format
 
@@ -230,9 +284,28 @@ Report each finding in this format, ordered by severity (BLOCKER first):
 For an absence finding, such as a missing Dockerfile instruction, cite the file
 without a fabricated line number.
 
-### Part 2: Summary Report
+### Part 2: Risk Report
 
-After all inline findings, output:
+After all inline findings, list every scored unit sorted by CRAP Score
+descending. Omit this part entirely when nothing was scored. Print it in full
+even in `--relaxed` mode; it is evidence, not a finding. It never replaces a
+finding: a unit whose score fires a change-risk rule gets a Part 1 finding in
+the standard format, and a bullet or note under this table does not count.
+
+```
+## Risk Report
+
+**Coverage Evidence:** `coverage/lcov.info` | none (worst case)
+
+| Function | Location | CC | Cov | CRAP | Basis |
+|---|---|---|---|---|---|
+| processOrder | `src/order.ts:12-58` | 9 | 40% | 39.5 | measured |
+| formatLabel | `src/order.ts:60-70` | 2 | — | 6.0 | worst case |
+```
+
+### Part 3: Summary Report
+
+After the Risk Report, output:
 
 ```
 ## Review Summary
@@ -271,10 +344,12 @@ Follow this sequence:
 3. Load relevant language reference(s) from `references/`
 4. Read the diff carefully. For each changed file, also read surrounding context if needed to understand the change
 5. Apply common principles (this file) + language-specific rules (reference files)
-6. Resolve every finding to a catalogued Rule ID and its fixed severity
-7. Produce findings in the output format above
-8. Produce the summary report with verdict
-9. If `--relaxed`, filter out NITs and non-pattern MINORs before outputting
+6. Score every touched unit per Change Risk and decide which rule, if any, fires
+7. Resolve every finding to a catalogued Rule ID and its fixed severity
+8. Produce findings in the output format above
+9. Produce the Risk Report
+10. Produce the summary report with verdict
+11. If `--relaxed`, filter out NITs and non-pattern MINORs before outputting
 
 ## Guidelines
 

@@ -21,6 +21,8 @@ from pathlib import Path
 
 import yaml
 
+from validate_structure import RULE_ROW, location_parts
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SKILL_DIR = REPO_ROOT / "skill"
 FIXTURE_GLOB = "*/*.fixture.yaml"
@@ -44,11 +46,7 @@ class Finding:
 def line_numbers(location: str | None) -> set[int]:
     if location is None:
         return set()
-    values: set[int] = set()
-    for part in re.split(r",\s*", location):
-        ends = [int(value) for value in part.split("-")]
-        values.update(range(ends[0], ends[-1] + 1))
-    return values
+    return {number for span in location_parts(location) for number in span}
 
 
 def parse_findings(markdown: str) -> list[Finding]:
@@ -110,22 +108,27 @@ def evaluate(
 def load_severities() -> dict[str, str]:
     severities: dict[str, str] = {}
     for path in [SKILL_DIR / "SKILL.md", *(SKILL_DIR / "references").glob("*.md")]:
-        for match in re.finditer(
-            r"^\|\s*`(?P<rule>[a-z0-9]+/[a-z0-9-]+)`\s*\|\s*"
-            r"(?P<severity>BLOCKER|MAJOR|MINOR|NIT)\s*\|",
-            path.read_text(),
-            re.MULTILINE,
-        ):
-            severities[match.group("rule")] = match.group("severity")
+        for line in path.read_text().splitlines():
+            if match := RULE_ROW.match(line):
+                severities[match.group("id")] = match.group("severity")
     return severities
 
 
 def prompt_for(fixture_path: Path, fixture: dict[str, object]) -> str:
     source = fixture_path.parent / str(fixture["source"])
+    coverage = fixture.get("coverage")
+    if coverage:
+        evidence_path = (fixture_path.parent / str(coverage)).relative_to(REPO_ROOT)
+        evidence = (
+            f"Coverage Evidence is at {evidence_path}; read it before scoring change risk. "
+        )
+    else:
+        evidence = "No Coverage Evidence exists for this file. "
     return (
         "Read skill/SKILL.md and follow it as the common-code-reviewer skill. "
         f"Load the Language Reference for {fixture['language']}. "
         f"Review only {source.relative_to(REPO_ROOT)} in --thorough mode. "
+        f"{evidence}"
         "Use the skill's normal Markdown output interface, including the visible "
         "Rule field for every finding. Do not edit or execute any reviewed file."
     )

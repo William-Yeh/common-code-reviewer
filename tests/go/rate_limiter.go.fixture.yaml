@@ -1,0 +1,17 @@
+version: 1
+language: go
+source: "rate_limiter.go"
+required:
+  - rule: common/critical-change-risk
+    location: "45-73"
+    rationale: "Allow has CC 8 (six ifs plus one ||) and no Coverage Evidence exists, so the worst-case CRAP Score is 8² + 8 = 72, above 30."
+  - rule: common/elevated-change-risk
+    location: "33-42"
+    rationale: "capacityFor has CC 3 (two case arms, default free) and no Coverage Evidence, so the worst-case CRAP Score is 9 + 3 = 12, between 8 and 30."
+forbidden:
+  - rule: common/excess-complexity
+    location: "45-73"
+    rationale: "Allow already fires critical-change-risk; the change-risk rules do not stack."
+  - rule: common/elevated-change-risk
+    location: "29-31"
+    rationale: "New has CC 1; even at 0% coverage its CRAP Score is 2, well under 8. Flagging it means the formula was misapplied."

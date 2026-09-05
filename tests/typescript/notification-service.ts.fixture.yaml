@@ -3,60 +3,60 @@ language: typescript
 source: "notification-service.ts"
 required:
   - rule: common/path-traversal
-    location: "148"
+    location: "174"
     rationale: "User-controlled template query param used directly in fs.readFileSync path. Attacker can read arbitrary files via ../../etc/passwd."
   - rule: common/xss
-    location: "151-152"
+    location: "177-178"
     rationale: "User input req.query.name rendered directly into HTML without escaping."
   - rule: common/authorization-gap
-    location: "145"
+    location: "170"
     rationale: "No authentication or authorization check on the preview endpoint."
   - rule: common/open-closed-violation
-    location: "62-97"
+    location: "56-101"
     rationale: "sendNotification requires modification for every new notification type. Violates Open-Closed Principle. Use strategy pattern — map of type → handler."
   - rule: common/liskov-violation
-    location: "42-49"
+    location: "37-50"
     rationale: "Square extends Rectangle but silently couples width and height. Code treating a Square as a Rectangle with independent dimensions gets unexpected behavior."
   - rule: common/interface-segregation
-    location: "14-22"
+    location: "13-21"
     rationale: "INotificationChannel has 7 methods. An SMS-only implementation would need to stub sendEmail, sendPush, sendSlack, generateReport, etc. Split into focused interfaces."
   - rule: common/layer-violation
-    location: "9-10"
+    location: "8-9"
     rationale: "Domain logic directly imports axios and fs. Infrastructure concerns (HTTP, filesystem) should be behind abstractions injected from outside."
   - rule: common/anemic-domain
-    location: "157-164"
+    location: "183-191"
     rationale: "Notification class is a pure data bag. All behavior (sending, scheduling, stats) lives in standalone functions. Move behavior into the domain object or use a proper service layer."
   - rule: common/hidden-side-effect
-    location: "104-110"
+    location: "105, 115-117"
     rationale: "calculateNotificationStats has hidden side effects: console.log, fs.writeFileSync, axios.post. Function name implies pure calculation. Extract side effects or rename."
   - rule: common/nondeterministic-dependency
-    location: "115-116"
+    location: "125-127"
     rationale: "shouldSendNow uses Date.now() directly — non-deterministic, untestable. Inject a clock/time provider."
   - rule: common/hard-coded-dependency
-    location: "119-120"
+    location: "130-132"
     rationale: "loadTemplate hardcodes filesystem path. Cannot test without real filesystem. Inject a template loader."
   - rule: common/hard-coded-dependency
-    location: "67-68, 72-73"
+    location: "62, 71, 82, 90, 95"
     rationale: "sendNotification hardcodes axios.post calls — cannot mock without module patching. Accept an HTTP client parameter or use DI."
   - rule: common/deep-nesting
-    location: "64-96"
+    location: "58-88"
     rationale: "Deep nesting — 3+ levels of if inside sendNotification. Flatten with early returns or extract per-type handlers."
   - rule: common/duplicated-logic
-    location: "82-87, 67-71"
+    location: "62-65, 71-74, 82-85, 90-93, 95-98"
     rationale: "Code duplication — HTTP POST logic repeated for each notification type with minor variations. Extract a common sender."
   - rule: common/unclear-name
-    location: "134-138"
+    location: "151-153"
     rationale: "Bad naming: d, temp, x — not intention-revealing. Use notifications, validEmails, index (or for...of)."
   - rule: common/dead-code
-    location: "128"
+    location: "141"
     rationale: "Dead code: debugInfo variable assigned but never used."
   - rule: common/dead-code
-    location: "143-144"
+    location: "163-166"
     rationale: "Dead code: legacyNotify function never called. Remove instead of keeping \"just in case.\""
   - rule: common/mixed-abstraction
-    location: "123-131"
+    location: "135-146"
     rationale: "processScheduled mixes abstraction levels — file I/O, scheduling logic, template rendering, and sending all in one method."
   - rule: common/weak-type-model
-    location: "161, 163"
+    location: "185, 190"
     rationale: "type: string and status: string — should use NotificationType union and a status union."
 forbidden: []

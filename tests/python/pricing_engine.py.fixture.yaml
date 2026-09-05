@@ -1,0 +1,24 @@
+version: 1
+language: python
+source: "pricing_engine.py"
+coverage: "lcov.info"
+required:
+  - rule: common/critical-change-risk
+    location: "42-66"
+    rationale: "quote_price has CC 10 (for, two ifs with an and, an if with an or, an if, an except, a ternary) and lcov.info shows 5 of 19 executable lines covered (26%): CRAP = 100 × 0.74³ + 10 ≈ 50, above 30."
+  - rule: common/excess-complexity
+    location: "69-82"
+    rationale: "apply_promotions has CC 7 (for, if, elif with an and, elif, if), above 6. Full coverage lowers its CRAP Score to 7 but does not remove the complexity."
+  - rule: common/elevated-change-risk
+    location: "85-91"
+    rationale: "shipping_band has CC 4 (generator for, two ifs) and lcov.info shows only the def line executed (1 of 7, 14%): CRAP = 16 × 0.86³ + 4 ≈ 14, between 8 and 30."
+forbidden:
+  - rule: common/excess-complexity
+    location: "42-66"
+    rationale: "quote_price already fires critical-change-risk; the change-risk rules do not stack, so excess-complexity must not be raised on it as well."
+  - rule: common/elevated-change-risk
+    location: "69-82"
+    rationale: "apply_promotions is fully covered per lcov.info, so its CRAP Score is exactly its CC of 7, not the worst-case 56. Raising a change-risk rule here means the Coverage Evidence was ignored."
+  - rule: common/critical-change-risk
+    location: "69-82"
+    rationale: "Same measured-path check: 7 is nowhere near 30."

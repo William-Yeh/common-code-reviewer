@@ -30,9 +30,9 @@ required:
     location: "46-54"
     rationale: Payment-kind dispatch is duplicated across charge and refund.
   - rule: common/private-logic
-    location: "56-65"
+    location: "61-65"
     rationale: Significant scoring behavior is exposed only through a private method.
   - rule: common/style-readability
-    location: "67-69"
+    location: "68-70"
     rationale: Redundant coercion, comparison, and ternary obscure a boolean value.
 forbidden: []

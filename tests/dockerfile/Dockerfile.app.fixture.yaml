@@ -3,31 +3,31 @@ language: dockerfile
 source: "Dockerfile.app"
 required:
   - rule: dockerfile/latest-base
-    location: "4"
+    location: "5"
     rationale: "FROM node:latest — floating tag is unpinned and non-reproducible. Upstream rewrites can silently break the build or introduce vulnerabilities. Use a specific version with a digest (e.g. node:20-alpine@sha256:<digest>)."
   - rule: dockerfile/baked-secret
-    location: "8"
+    location: "10"
     rationale: "ENV DB_PASSWORD=supersecret123 bakes a credential into the image layer. The value persists in history even if overwritten in a later layer. Inject secrets at runtime via orchestrator env vars or a secrets manager."
   - rule: dockerfile/tls-disabled
-    location: "20"
+    location: "25"
     rationale: "curl -k disables TLS certificate verification. Fetching and executing a shell script over an unverified connection is a direct supply chain attack vector."
   - rule: dockerfile/root-runtime
-    location: "24"
+    location: "31"
     rationale: "No USER instruction — the container runs as root. A process escape grants host root access. Add RUN addgroup -S app && adduser -S app -G app and USER app before CMD."
   - rule: dockerfile/single-stage-toolchain
-    location: "4"
+    location: "5, 14"
     rationale: "No multi-stage build: python3 and build-essential (native compilers) are installed in the same stage that runs the application. These add significant attack surface and image size. Separate the build stage from the runtime stage."
   - rule: dockerfile/split-package-cleanup
-    location: "13-14"
+    location: "14-15"
     rationale: "apt-get install and rm -rf /var/lib/apt/lists/* are in separate RUN layers. The deleted files are still committed in the layer below — they waste space and are not actually removed from the image. Combine into one RUN with &&."
   - rule: dockerfile/cache-hostile-copy
-    location: "16-17"
+    location: "18-19"
     rationale: "COPY . . before RUN npm install invalidates the dependency install cache on every source change. Move COPY package*.json ./ and RUN npm install before COPY . .."
   - rule: dockerfile/implicit-add
     location: "22"
     rationale: "ADD config/app.json /app/config.json — use COPY for local file copies. ADD has implicit tar-extraction and URL-fetching behavior that is unexpected here."
   - rule: dockerfile/missing-workdir
-    location: "4"
+    location: "5, 18"
     rationale: "No WORKDIR instruction — all paths are relative to the implicit /. Set an explicit WORKDIR /app to make paths predictable and avoid writing files to the filesystem root."
   - rule: dockerfile/missing-healthcheck
     rationale: "No HEALTHCHECK instruction. Orchestrators (Docker Swarm, Kubernetes readiness probes) cannot determine container health without it. Add a HEALTHCHECK CMD curl -f http://localhost:3000/health || exit 1."

@@ -1,0 +1,14 @@
+# Live conformance runner default report (pass --report to put it elsewhere)
+conformance-report.json
+
+# coverage.py working data; the committed evidence is tests/*/lcov.info
+.coverage
+.coverage.*
+
+# Python bytecode and tool caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS noise
+.DS_Store
