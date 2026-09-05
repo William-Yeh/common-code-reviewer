@@ -47,12 +47,13 @@ def patterns(language: dict[str, object]) -> str:
 
 def skill_table(languages: list[dict[str, object]]) -> str:
     rows = [
-        "| Patterns | Language | Reference |",
-        "|---|---|---|",
+        "| Patterns | Language | Reference | Change Risk |",
+        "|---|---|---|---|",
     ]
     rows.extend(
         f"| {patterns(language)} | {language['name']} | "
-        f"[{language['reference']}]({language['reference']}) |"
+        f"[{language['reference']}]({language['reference']}) | "
+        f"{'scored' if language.get('scored') else 'not scored'} |"
         for language in languages
     )
     return "\n".join(rows)

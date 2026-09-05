@@ -3,51 +3,51 @@ language: rust
 source: "user_service.rs"
 required:
   - rule: rust/unsafe-without-safety
-    location: "130"
+    location: "116"
     rationale: "data.get_unchecked(0) in an unsafe block with no // SAFETY: comment — and it's UB when data is empty. Use the safe data.first() / data.get(0) which returns Option."
   - rule: common/interface-segregation
-    location: "15-24"
+    location: "13-22"
     rationale: "UserStore trait has 8 methods. A read-only consumer must still implement save, delete, bulk_import, export_csv, etc. Split into UserReader / UserWriter / UserReporter."
   - rule: rust/stringly-typed-domain
-    location: "31-52"
+    location: "27-48"
     rationale: "handle_user_action matches on an action &str; each new action edits this function. Model actions as an enum so the match is exhaustive and the compiler enforces new arms."
   - rule: common/open-closed-violation
-    location: "50"
+    location: "46"
     rationale: "The _ => Ok(()) arm makes unknown actions silently succeed. Return an error for unrecognized actions."
   - rule: common/anemic-domain
-    location: "57-66"
+    location: "53-60"
     rationale: "User is a pure data bag — all behavior (activation, counting, deactivation) lives in free functions and UserService."
   - rule: rust/erased-public-error
-    location: "17-24, 35, 79"
+    location: "16-21, 27, 81, 137"
     rationale: "Public API returns Box<dyn Error>, erasing the error variant so callers can't match on it. Expose a typed error enum (e.g. via thiserror)."
   - rule: common/hidden-side-effect
-    location: "70-77"
+    location: "65-71"
     rationale: "count_active_users is named as a pure count but writes /tmp/user-stats.txt. Extract the side effect; keep the counter pure."
   - rule: common/hard-coded-dependency
-    location: "73, 84-88"
+    location: "67, 82"
     rationale: "SystemTime::now() and the hardcoded /etc/app/users.json path make these non-deterministic and untestable. Inject a clock and a config source/Reader."
   - rule: rust/shared-mutex-overuse
-    location: "82"
+    location: "76"
     rationale: "cache: Arc<Mutex<HashMap<...>>> introduces shared mutability before it's shown to be needed. If the service has a single owner, &mut self + a plain HashMap avoids the lock and its panic surface."
   - rule: rust/clone-to-compile
-    location: "96-97, 109, 140"
+    location: "90, 101, 124"
     rationale: "user.clone() / x.clone() clone whole User values (in cache_user, in the loop in deactivate_inactive, and in proc) to satisfy the borrow checker. Restructure to move or store references/Arc<User>."
   - rule: common/deep-nesting
-    location: "103-117"
+    location: "96-108"
     rationale: "deactivate_inactive nests if 4 levels deep. Flatten with early continue, or extract a should_deactivate(&User, days) predicate and filter."
   - rule: common/unclear-name
-    location: "135-143"
+    location: "120-128"
     rationale: "proc, d, f, r, x reveal no intent. Rename to users_with_role(users, role) etc."
   - rule: common/dead-code
-    location: "146-148"
+    location: "131-133"
     rationale: "old_notify is never called. Remove it."
   - rule: common/dependency-inversion
-    location: "152-154"
+    location: "137-139"
     rationale: "remove_user takes the concrete &mut PostgresStore instead of &mut impl UserStore. Depend on the abstraction so it works with any store and is testable with a fake."
   - rule: rust/raw-domain-value
-    location: "61, 62"
+    location: "57, 58"
     rationale: "role: String and status: String should be Role / Status enums — the stringly-typed fields permit invalid values the compiler could reject."
   - rule: rust/panic-in-library
-    location: "75"
+    location: "69"
     rationale: "std::fs::write(...).unwrap() in a non-test path panics on any I/O error. Propagate with ? instead."
 forbidden: []

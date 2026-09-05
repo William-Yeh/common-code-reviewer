@@ -120,3 +120,42 @@ Rust models errors as values — review them as carefully as Go's:
 - **`pub` everything**: leaking internals as `pub` instead of `pub(crate)`/private — every `pub` item is part of your SemVer contract.
 - **Ignoring `#[must_use]`**: discarding a `Result` or a builder's returned value.
 - **Index-based loops over `.iter()`**: `for i in 0..v.len() { v[i] }` reintroduces bounds checks and panics the borrow checker would prevent.
+
+## Change Risk
+
+### Scored Units
+
+`fn` at module level, in `impl` blocks (including `new` and trait
+implementations), and trait default methods. Closures fold into the enclosing
+unit. Not scored, having no body: trait method signatures and `extern`
+declarations. `macro_rules!` bodies are not scored.
+
+### Decision Points
+
+| Category | Rust |
+|---|---|
+| Branch | `if`, `if let`, `else if`, `let ... else`, a match-arm guard |
+| Loop | `for`, `while`, `while let` |
+| Case arm | each `match` arm after the first; an exhaustive match's last arm is its `else`, which is why a `_` arm is free |
+| Exception handler | none |
+| Short-circuit operator | `&&`, `\|\|` |
+| Conditional expression | none; `if` is already an expression |
+| Early-return operator | `?` |
+
+Not counted: `else`, `loop`, `break`, `continue`, `unwrap`, `expect`.
+
+### Test Files
+
+`#[cfg(test)]` modules and anything under `tests/`, `benches/`, or `examples/`.
+
+### Coverage Evidence
+
+`cargo llvm-cov --lcov --output-path lcov.info` writes LCOV and `--cobertura`
+writes Cobertura; `cargo tarpaulin --out lcov` or `--out xml` do the same. The
+lines inside the unit's range give cov.
+
+### Oracle Deviations
+
+`lizard` matches this profile except that it misses `let ... else` and counts a
+`where` clause in the signature (+1). Clippy's `cognitive_complexity` is a
+different metric and not comparable.

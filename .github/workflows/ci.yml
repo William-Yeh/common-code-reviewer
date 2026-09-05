@@ -34,6 +34,12 @@ jobs:
       - name: Test conformance matcher
         run: uv run tests/scripts/test_conformance.py
 
+      - name: Test structure validator
+        run: uv run tests/scripts/test_validate_structure.py
+
+      - name: Test generated-table builders
+        run: uv run tests/scripts/test_sync_generated.py
+
   live-conformance:
     name: Live Claude Code Conformance
     runs-on: ubuntu-latest

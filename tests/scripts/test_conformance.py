@@ -10,7 +10,32 @@
 
 import unittest
 
-from run_conformance import Finding, evaluate, line_numbers, load_severities, parse_findings
+from run_conformance import (
+    REPO_ROOT,
+    Finding,
+    evaluate,
+    line_numbers,
+    load_severities,
+    parse_findings,
+    prompt_for,
+)
+
+
+class PromptTests(unittest.TestCase):
+    FIXTURE_PATH = REPO_ROOT / "tests/python/pricing_engine.py.fixture.yaml"
+
+    def test_prompt_without_coverage_evidence_says_none_exists(self) -> None:
+        prompt = prompt_for(self.FIXTURE_PATH, {"language": "python", "source": "pricing_engine.py"})
+        self.assertIn("Review only tests/python/pricing_engine.py", prompt)
+        self.assertIn("No Coverage Evidence exists", prompt)
+
+    def test_prompt_names_coverage_evidence_when_fixture_declares_it(self) -> None:
+        prompt = prompt_for(
+            self.FIXTURE_PATH,
+            {"language": "python", "source": "pricing_engine.py", "coverage": "lcov.info"},
+        )
+        self.assertIn("Coverage Evidence is at tests/python/lcov.info", prompt)
+        self.assertNotIn("No Coverage Evidence", prompt)
 
 
 class FindingParserTests(unittest.TestCase):

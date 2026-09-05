@@ -6,22 +6,22 @@ required:
     location: "44-49"
     rationale: "SQL injection via fmt.Sprintf. User input directly interpolated into SQL. Use parameterized queries ($1, $2)."
   - rule: common/sql-injection
-    location: "87"
+    location: "85"
     rationale: "SQL injection inside N+1 loop. id interpolated into query string."
   - rule: common/ignored-error
-    location: "38-39"
+    location: "38"
     rationale: "ShouldBindJSON error ignored. Invalid JSON silently proceeds with zero-value body."
   - rule: common/ignored-error
     location: "41"
     rationale: "Unsafe type assertion body[\"customer_id\"].(string) without comma-ok pattern. Will panic on missing or non-string values."
   - rule: common/ignored-error
-    location: "82"
+    location: "81"
     rationale: "rows.Scan error ignored. Corrupted data silently propagated."
   - rule: common/ignored-error
-    location: "85"
+    location: "84"
     rationale: "Error discarded with blank identifier _ on N+1 query. Query failures silently produce nil rows."
   - rule: common/resource-leak
-    location: "78"
+    location: "70"
     rationale: "Missing defer rows.Close() after db.Query. Connection leak will exhaust connection pool."
   - rule: common/shared-mutable-state
     location: "35"
@@ -30,39 +30,39 @@ required:
     location: "19-22"
     rationale: "Package-level mutable globals: db, orderCache. Inject dependencies instead."
   - rule: common/n-plus-one-query
-    location: "85-94"
+    location: "84-86"
     rationale: "N+1 query: executing SELECT ... FROM order_items per order inside a loop. Use a JOIN or batch query."
   - rule: common/unbounded-query
-    location: "76"
+    location: "70"
     rationale: "Unbounded SELECT ... FROM orders with no LIMIT or pagination."
   - rule: common/unmanaged-concurrency
-    location: "61"
+    location: "63"
     rationale: "Goroutine go notifyWarehouse(body) without lifecycle management. No errgroup, no context cancellation — goroutine leak."
   - rule: common/weak-type-model
-    location: "37, 104"
+    location: "36, 106"
     rationale: "map[string]interface{} used for request body and throughout. Define typed structs for Order, OrderItem."
   - rule: common/incomplete-error-handling
-    location: "29-30"
+    location: "29-31"
     rationale: "InitDB logs error but continues execution. Subsequent calls to db will nil-pointer panic. Should return error or fatal."
   - rule: common/sensitive-data-exposure
-    location: "54, 78"
+    location: "72"
     rationale: "Internal error details leaked to client via err.Error() in JSON response. Return generic message, log details."
   - rule: common/ignored-error
-    location: "106"
+    location: "107"
     rationale: "json.Marshal error ignored with blank identifier."
   - rule: common/unmanaged-concurrency
-    location: "26, 104"
+    location: "25, 106"
     rationale: "Missing context.Context parameter on InitDB and notifyWarehouse. Cannot respect timeouts or cancellation."
   - rule: common/missing-timeout
-    location: "109"
+    location: "110-111"
     rationale: "No timeout on http.Post — will use http.DefaultClient with no timeout. Can hang indefinitely."
   - rule: common/incomplete-error-handling
-    location: "113"
+    location: "114"
     rationale: "Error logged without wrapping: log.Println(err). Use fmt.Errorf(\"notifying warehouse: %w\", err)."
   - rule: common/language-idiom
-    location: "10"
+    location: "30, 114"
     rationale: "log.Println — consider slog for structured logging (Go 1.21+)."
   - rule: common/graceful-shutdown
-    location: "119"
+    location: "120-125"
     rationale: "No graceful shutdown. gin.Engine returned without http.Server wrapping for Shutdown(ctx)."
 forbidden: []

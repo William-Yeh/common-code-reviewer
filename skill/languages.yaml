@@ -2,6 +2,8 @@ languages:
   - id: typescript
     name: TypeScript/JavaScript
     reference: references/typescript.md
+    scored: true
+    comment_prefixes: ["//", "/*"]
     extensions: [.ts, .tsx, .js, .jsx]
     filenames: []
     frameworks: [React, NestJS, Next.js App Router]
@@ -9,6 +11,8 @@ languages:
   - id: python
     name: Python
     reference: references/python.md
+    scored: true
+    comment_prefixes: ["#"]
     extensions: [.py, .pyi]
     filenames: []
     frameworks: [FastAPI, SQLAlchemy]
@@ -16,6 +20,8 @@ languages:
   - id: java
     name: Java
     reference: references/java.md
+    scored: true
+    comment_prefixes: ["//", "/*"]
     extensions: [.java]
     filenames: []
     frameworks: [Spring Boot, Quarkus]
@@ -23,6 +29,8 @@ languages:
   - id: go
     name: Go
     reference: references/go.md
+    scored: true
+    comment_prefixes: ["//", "/*"]
     extensions: [.go]
     filenames: []
     frameworks: [stdlib, Gin, gRPC]
@@ -30,6 +38,8 @@ languages:
   - id: rust
     name: Rust
     reference: references/rust.md
+    scored: true
+    comment_prefixes: ["//", "/*"]
     extensions: [.rs]
     filenames: []
     frameworks: [std, Tokio]
@@ -37,6 +47,8 @@ languages:
   - id: dockerfile
     name: Dockerfile
     reference: references/dockerfile.md
+    scored: false
+    comment_prefixes: ["#"]
     extensions: []
     filenames: [Dockerfile, "Dockerfile.*", "*.dockerfile"]
     frameworks: [Docker, BuildKit, multi-stage builds]

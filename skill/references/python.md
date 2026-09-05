@@ -107,3 +107,42 @@ Do not flag formatting issues that Ruff/Black would auto-fix. Focus on semantic 
 - **Ignoring async**: Using synchronous libraries (e.g., `requests`) in an async application — causes thread starvation.
 - **Over-inheriting**: Deep class hierarchies where composition would be simpler and more flexible.
 - **Missing `__all__`**: Public modules should define `__all__` to make the public API explicit.
+
+## Change Risk
+
+### Scored Units
+
+`def` and `async def` at module level, in classes (including `__init__`,
+properties, and dunder methods), and named nested `def`s. `lambda` bodies fold
+into the enclosing unit. Not scored, having no body: `@overload` signatures,
+`Protocol` and abstract methods whose body is only `...` or `pass`, `.pyi` stubs.
+
+### Decision Points
+
+| Category | Python |
+|---|---|
+| Branch | `if`, `elif`, comprehension `if` filter |
+| Loop | `for`, `async for`, `while`, comprehension `for` |
+| Case arm | each `case` in `match`; `case _` free |
+| Exception handler | each `except` |
+| Short-circuit operator | `and`, `or` |
+| Conditional expression | `x if c else y` |
+| Early-return operator | none |
+
+Not counted: `else`, `finally`, `with`, `assert`, loop `else`, `:=`.
+
+### Test Files
+
+`test_*.py`, `*_test.py`, `conftest.py`, and anything under `tests/` or `test/`.
+
+### Coverage Evidence
+
+`pytest --cov=<package> --cov-report=lcov` writes `coverage.lcov`;
+`--cov-report=xml` writes Cobertura `coverage.xml`. Both carry coverage.py line
+data; the lines inside the unit's range give cov.
+
+### Oracle Deviations
+
+`lizard` matches this profile except that it counts `case _` (+1). ruff and
+flake8 `C901` (mccabe) do not count `and`/`or`, so their CC runs lower. radon
+`cc` matches.

@@ -3,23 +3,23 @@ language: dockerfile
 source: "Dockerfile.builder"
 required:
   - rule: dockerfile/mutable-base
-    location: "4"
+    location: "5, 12"
     rationale: "FROM golang:1.22-alpine uses a mutable tag. Tags can be overwritten — pin to a digest for reproducible builds (e.g. golang:1.22-alpine@sha256:<digest>). Same applies to alpine:3.19 on line 11."
   - rule: dockerfile/root-runtime
-    location: "13"
+    location: "34"
     rationale: "No USER instruction in the final stage — the server process runs as root. Add a non-root user and switch to it before ENTRYPOINT."
   - rule: dockerfile/broad-stage-copy
-    location: "16"
+    location: "19"
     rationale: "COPY --from=build / / copies the entire build filesystem — including the Go toolchain (/usr/local/go), build cache, and test artifacts — into the runtime image. Copy only the compiled binary: COPY --from=build /app/server /app/server."
   - rule: dockerfile/unverified-artifact
-    location: "19-21"
+    location: "26-28"
     rationale: "wget downloads a binary without checksum verification. A compromised release or MITM can substitute a malicious binary. Verify with sha256sum after download."
   - rule: dockerfile/confused-build-runtime-config
-    location: "17-18"
+    location: "22-23"
     rationale: "ARG APP_CONFIG is used to seed an ENV. ARG values are build-time only and do not persist — this pattern works but the intent is better expressed as a direct ENV CONFIG_PATH=/etc/app/config.yaml with an override at runtime. The current form is not wrong but is confusing."
   - rule: dockerfile/missing-healthcheck
     rationale: "No HEALTHCHECK instruction. For a gRPC service, use grpc_health_probe that is already downloaded: HEALTHCHECK CMD grpc_health_probe -addr=:8080 || exit 1."
   - rule: dockerfile/unnamed-stage
-    location: "11"
+    location: "12"
     rationale: "The runtime FROM alpine:3.19 stage is unnamed. Add AS runtime (or AS final) for readability and to enable targeted builds (docker build --target runtime)."
 forbidden: []
