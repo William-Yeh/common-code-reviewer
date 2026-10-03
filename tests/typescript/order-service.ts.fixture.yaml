@@ -3,45 +3,45 @@ language: typescript
 source: "order-service.ts"
 required:
   - rule: common/sql-injection
-    location: "30-33"
+    location: "21-24"
     rationale: "SQL injection via string interpolation in createOrder. User input directly embedded in SQL query."
   - rule: common/sql-injection
-    location: "53-56"
+    location: "39-42"
     rationale: "SQL injection via string interpolation in searchOrders. Same pattern repeated."
   - rule: common/ignored-error
-    location: "40"
+    location: "29"
     rationale: "Empty catch block catch (e) {} silently swallows warehouse notification failure."
   - rule: common/god-module
-    location: "13"
+    location: "8"
     rationale: "God controller — mixes HTTP handling, business logic, data access, and caching in a single class. Should separate into Controller → Service → Repository layers."
   - rule: common/dependency-inversion
-    location: "15-16"
-    rationale: "Field injection via @Inject() — should use constructor injection for testability and explicit dependencies."
+    location: "9-10"
+    rationale: "`@Inject() private dataSource: DataSource` binds the controller to TypeORM's concrete DataSource and raw SQL instead of a repository abstraction it owns; the field injection also hides the dependency from the constructor."
   - rule: common/weak-type-model
-    location: "9, 26, 51, 59, 71"
+    location: "5, 19, 38, 44, 56"
     rationale: "any type used in multiple places: orderCache, body parameters, results array, notifyWarehouse parameter. Disables type safety."
-  - rule: common/interface-segregation
-    location: "26"
-    rationale: "No DTO or validation on @Body() body — raw request body with no type checking or constraint validation."
+  - rule: common/missing-input-validation
+    location: "19"
+    rationale: "createOrder(@Body() body) takes an untyped request body with no DTO or class-validator constraints, so untrusted input crosses the HTTP boundary unvalidated. (Was interface-segregation, which describes interfaces forcing stubs, not this.)"
   - rule: common/unbounded-query
-    location: "21"
+    location: "14"
     rationale: "Unbounded SELECT * FROM orders with no LIMIT or pagination. Will OOM on large tables."
   - rule: common/shared-mutable-state
-    location: "9"
+    location: "5"
     rationale: "Module-level mutable let orderCache — shared mutable state across requests."
   - rule: common/imperative-transformation
-    location: "59-66"
+    location: "44-51"
     rationale: "forEach with side effect (pushing to external array). Should use map to transform."
   - rule: common/magic-literal
-    location: "36"
+    location: "26"
     rationale: "Magic number 500 — no explanation of why this threshold triggers warehouse notification."
-  - rule: common/language-idiom
-    location: "75-78"
-    rationale: "fetch response not checked for HTTP errors. Failures will pass silently."
   - rule: common/incomplete-error-handling
-    location: "73"
-    rationale: "console.log in production code. Should use structured logger."
+    location: "59-63"
+    rationale: "The fetch response is never checked: fetch only rejects on network errors, so a 4xx/5xx from the warehouse passes as success. (Was language-idiom, but an unchecked failure is incomplete error handling.)"
+  - rule: common/sensitive-data-exposure
+    location: "57"
+    rationale: "console.log writes the whole order, including the customer ID from the request body, to stdout in production; log the order ID through a structured logger instead. (Was incomplete-error-handling, which this line is not.)"
   - rule: common/style-naming
-    location: "13"
-    rationale: "Default export — prefer named export for refactoring safety and IDE support."
+    location: "8"
+    rationale: "`export default class OrderController` lets every importer pick its own name for the class, so the codebase's names for it drift; a named export fixes the name (typescript.md Style Standard: no default exports)."
 forbidden: []

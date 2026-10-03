@@ -1,0 +1,17 @@
+version: 1
+language: dockerfile
+source: "Dockerfile.worker"
+required:
+  - rule: dockerfile/heavy-runtime-base
+    location: "12"
+    rationale: "The runtime stage ships a statically linked binary (CGO_ENABLED=0) on a full Ubuntu image; nothing in the stage needs a distribution, so distroless/static or scratch carries the same binary without the package set."
+forbidden:
+  - rule: dockerfile/heavy-runtime-base
+    location: "4"
+    rationale: "golang:1.27-alpine is the build stage; its toolchain never reaches the runtime image, so the rule applies only to the final stage."
+  - rule: dockerfile/latest-base
+    location: "4, 12"
+    rationale: "Both base images carry an explicit tag and a digest."
+  - rule: dockerfile/root-runtime
+    location: "15"
+    rationale: "The final stage switches to numeric user 10001:10001 before ENTRYPOINT."

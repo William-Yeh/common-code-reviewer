@@ -1,0 +1,11 @@
+version: 1
+language: java
+source: "InvoiceServiceTest.java"
+required:
+  - rule: common/assertion-free-test
+    location: "13-16"
+    rationale: "issuesInvoiceForPaidOrder calls the service and asserts nothing, so it passes whatever issue() returns or stores; only a thrown exception could fail it."
+forbidden:
+  - rule: common/assertion-free-test
+    location: "18-23"
+    rationale: "appliesVatToNetAmount asserts the computed total. Flagging it means the rule fires on any test rather than on tests without assertions."

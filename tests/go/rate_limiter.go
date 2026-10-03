@@ -1,4 +1,3 @@
-// Test sample: token-bucket rate limiter with change-risk hot spots.
 // No Coverage Evidence accompanies this file, so every score is worst case.
 
 package ratelimit

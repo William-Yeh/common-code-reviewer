@@ -13,6 +13,7 @@ These rules supplement the common review framework. Apply them to `.rs` files.
 | `rust/erased-public-error` | MAJOR | A public library interface erases actionable error variants. |
 | `rust/shared-mutex-overuse` | MINOR | `Arc<Mutex<_>>` introduces shared mutation without demonstrated ownership need. |
 | `rust/clone-to-compile` | MINOR | Owned values are cloned to bypass an unresolved ownership design. |
+| `rust/hot-loop-clone` | MAJOR | A collection or large owned value is cloned on every iteration of a loop where a borrow would serve. |
 | `rust/stringly-typed-domain` | MAJOR | Strings model a closed domain whose variants should be explicit. |
 | `rust/raw-domain-value` | NIT | A raw primitive represents a domain value that needs its own type. |
 | `rust/discarded-result` | BLOCKER | A `Result` is discarded and failure is allowed to continue. |
@@ -22,7 +23,8 @@ These rules supplement the common review framework. Apply them to `.rs` files.
 
 Follow the **Rust API Guidelines** and **Rust Style Guide** (the official standards). Additionally:
 
-- Run `rustfmt` and `clippy` — formatting and most lints are non-negotiable. Do not flag any formatting issue or basic lint that these tools handle (e.g. `cargo clippy -- -D warnings`).
+- Run `rustfmt` and `clippy` — formatting and most lints are non-negotiable. Do not flag any formatting issue or basic lint that these tools handle (e.g. `cargo clippy -- -D warnings`). Lint levels belong in the `[lints]` / `[workspace.lints]` table of `Cargo.toml` (1.74+), not in scattered crate-level attributes or CI flags.
+- Silence a lint with `#[expect(lint, reason = "...")]` (1.81+), not `#[allow]`: `expect` warns once the suppression is no longer needed. Flag a new `#[allow]` without a `reason` — `common/language-idiom`.
 - Naming: `snake_case` for functions, variables, modules, and crates; `CamelCase` for types, traits, and enum variants; `SCREAMING_SNAKE_CASE` for constants and statics. Flag deviations.
 - Acronyms are treated as one word: `Uuid`, `HttpClient`, `parse_id` — not `UUID`, `HTTPClient`, `parseID`.
 - Conversions: `as_*` (borrow → borrow, cheap), `to_*` (borrow → owned, expensive), `into_*` (owned → owned, consuming). Flag a `to_*` method that is actually cheap, or `into_*` that doesn't consume `self`.
@@ -32,6 +34,8 @@ Follow the **Rust API Guidelines** and **Rust Style Guide** (the official standa
 
 ## Prefer Modern / Idiomatic Features
 
+Findings from this table are `common/language-idiom` unless a row's pattern also matches a more specific rule in this reference or the catalog; that rule's ID and severity take precedence. Gate each row on the crate's `edition` and `rust-version`.
+
 | Legacy / Non-idiomatic | Prefer | Notes |
 |---|---|---|
 | `match opt { Some(x) => x, None => return ... }` | `let Some(x) = opt else { return ... };` | let-else (1.65+) |
@@ -40,7 +44,18 @@ Follow the **Rust API Guidelines** and **Rust Style Guide** (the official standa
 | Stringly-typed errors / `Box<dyn Error>` everywhere | `anyhow::Result` (apps) / typed enums (libs) | see Error Handling |
 | `vec.iter().map(...).collect::<Vec<_>>()` then loop | chain iterator adaptors, `collect` once | avoid intermediate allocations |
 | `.clone()` to satisfy the borrow checker | borrow, restructure, or `Rc`/`Arc` deliberately | see Ownership |
-| `lazy_static!` | `std::sync::LazyLock` / `OnceLock` (1.80+) | stdlib, no macro crate |
+| `lazy_static!` / `once_cell` | `std::sync::LazyLock` (1.80+) / `OnceLock` (1.70+) | stdlib, no extra crate |
+| Nested `if let` / `if let ... && cond` workarounds | let chains: `if let Some(x) = a && let Ok(y) = f(x) { .. }` | 1.88, edition 2024 only |
+| `\|\| async { .. }` closures that borrow their captures | async closures `async \|\| { .. }` and `AsyncFn*` bounds | 1.85 |
+| Hand-written `fn as_super(&self) -> &dyn Super` | trait upcasting (`&dyn Sub` coerces to `&dyn Super`) | 1.86 |
+| `unsafe` index tricks to borrow two slice/map elements mutably | `get_disjoint_mut` | 1.86 |
+| `opt.map_or(true, \|x\| ..)` | `opt.is_none_or(\|x\| ..)` | 1.82 |
+| `std::ptr::addr_of!` / `addr_of_mut!` | `&raw const x` / `&raw mut x` | 1.82 |
+| `fs2` / `fd-lock` for advisory file locks | `File::lock`, `File::try_lock`, `File::lock_shared` | 1.89 |
+| `cfg-if` crate | `cfg_select!` | 1.95 |
+| `assert!(matches!(v, Pat))` in tests | `assert_matches!(v, Pat)` (import from `std::assert_matches`; not in the prelude) | 1.96 |
+| `match` arms that nest an `if let` in the body | `if let` guards (`Some(x) if let Ok(y) = parse(x) => ..`); guards do not count toward exhaustiveness | 1.95 |
+| Public `-> impl Trait` that captures more lifetimes than callers need | precise capturing `-> impl Trait + use<'a, T>` | 1.82 (2024 edition captures all in-scope lifetimes by default) |
 | `mem::replace(&mut x, Default::default())` | `mem::take(&mut x)` | clearer |
 | Manual `Future` polling | `async`/`.await` | unless writing a runtime primitive |
 | `extern crate` declarations | edition 2018+ implicit imports | remove |
@@ -53,7 +68,7 @@ Rust's type system encodes invariants — review whether the change *uses* it or
 - **Newtypes for domain values**: flag raw `String`/`u64` passed where mixing units/IDs is possible (`UserId`, `Cents`). A `struct UserId(u64)` prevents accidental argument swaps the compiler can't otherwise catch.
 - **Borrow, don't own, in function signatures**: accept `&str` not `String`, `&[T]` not `Vec<T>`, `&T` not `T` when you only read. Flag owned parameters that force callers into needless clones/allocations.
 - **`impl Trait` vs generics vs `dyn`**: `impl Trait` in argument position for simple cases; named generic `<T: Trait>` when the type is referenced more than once; `Box<dyn Trait>` only when you genuinely need heterogeneous types or dynamic dispatch. Flag `dyn` used purely to avoid writing a generic — it costs a vtable indirection.
-- **`.clone()` as a borrow-checker escape hatch**: flag clones that exist only to sidestep a borrow error, especially in hot paths or on large owned types. Ask whether a borrow, a restructure, or `Rc`/`Arc` is the right tool. A `.clone()` of a `String` in a loop is a MINOR smell; cloning a large `Vec`/struct per iteration is MAJOR.
+- **`.clone()` as a borrow-checker escape hatch**: flag clones that exist only to sidestep a borrow error, especially in hot paths or on large owned types. Ask whether a borrow, a restructure, or `Rc`/`Arc` is the right tool. A clone that only sidesteps a borrow error is `rust/clone-to-compile`. Cloning a collection or large struct on every loop iteration is `rust/hot-loop-clone` instead; the two do not stack on one site.
 - **`Rc`/`Arc` + `RefCell`/`Mutex`**: this combination re-introduces shared mutability that the borrow checker normally prevents. Flag it when a simpler ownership model (single owner + borrows, or passing `&mut`) would work — it moves aliasing bugs and borrow violations from compile time to runtime (`RefCell` panics).
 - **Lifetimes in public APIs**: flag gratuitous explicit lifetimes that elision would cover, and flag returning references tied to local data (won't compile, but the *design* of returning a borrow vs an owned value is worth a comment).
 
@@ -73,11 +88,21 @@ Rust models errors as values — review them as carefully as Go's:
 
 `unsafe` opts out of the compiler's guarantees — review it like security-critical code:
 
-- **Every `unsafe` block needs a `// SAFETY:` comment** stating the invariants the caller/author guarantees. Flag missing SAFETY comments — MAJOR.
+- **Every `unsafe` block needs a `// SAFETY:` comment** stating the invariants the caller/author guarantees. Flag missing SAFETY comments — `rust/unsafe-without-safety`.
 - **Justify the `unsafe`**: flag `unsafe` used for performance without a benchmark, or where a safe abstraction (`split_at_mut`, `slice::windows`, `Vec::with_capacity`) exists. Most application code should have zero `unsafe`.
 - **`unsafe fn` must document preconditions** in a `# Safety` doc section. Flag public `unsafe fn` without it.
-- **Raw pointers, `transmute`, `mem::uninitialized`/`MaybeUninit`, FFI**: scrutinize for UB — aliasing `&mut`, dangling pointers, invalid bit patterns, alignment, and uninitialized reads. Any potential UB is a BLOCKER.
-- **`unwrap` inside `unsafe`** that panics across an FFI boundary is undefined behavior — BLOCKER.
+- **Raw pointers, `transmute`, `MaybeUninit`, FFI**: scrutinize for UB — aliasing `&mut`, dangling pointers, invalid bit patterns, alignment, and uninitialized reads. Any potential UB is a BLOCKER. `mem::uninitialized` is deprecated and UB for most types; replace it with `MaybeUninit` — `rust/unsafe-without-safety`.
+- **Panics in FFI callbacks**: since 1.81, a panic escaping an `extern "C"` function aborts the process (it is no longer UB). Flag `unwrap`/`expect`/indexing in `extern "C"` callbacks that a foreign caller invokes on input-derived values — `rust/panic-in-library`. Code that must unwind through foreign frames needs the `"C-unwind"` ABI.
+
+### Edition 2024 unsafe rules
+
+Flag each as `rust/unsafe-without-safety` (all apply from 1.85 in edition 2024 crates):
+
+- `std::env::set_var` / `remove_var` are `unsafe`: another thread may read the environment concurrently. Flag calls in multithreaded or async code; configure the child `Command` or pass values explicitly instead.
+- References to a `static mut` (`&STATIC`, `&mut STATIC`) are denied by default. Replace with atomics, `Mutex`, `OnceLock`, or `&raw const`/`&raw mut` with a SAFETY argument. Flag an `#[allow(static_mut_refs)]` that only silences the lint.
+- `unsafe_op_in_unsafe_fn` warns: each unsafe operation inside an `unsafe fn` needs its own `unsafe {}` block with a `// SAFETY:` comment. The function's `unsafe` does not cover its body.
+- `extern` blocks must be `unsafe extern`, and `no_mangle`, `export_name`, and `link_section` must be written `#[unsafe(...)]`. Check every item declared `safe fn` inside an `unsafe extern` block: that declaration is the safety claim.
+- Do not silence `never_type_fallback_flowing_into_unsafe` (deny-by-default since 1.92); add the type annotation it asks for.
 
 ## Functional & Iterator Patterns
 
@@ -90,9 +115,10 @@ Rust models errors as values — review them as carefully as Go's:
 
 ## Concurrency & Async
 
-- **`Send`/`Sync` are the compiler's race guards** — but review what crosses threads. Flag `Arc<Mutex<T>>` protecting a large critical section, or a `Mutex` held across an `.await` point (deadlock / blocks the executor) — MAJOR/BLOCKER.
+- **`Send`/`Sync` are the compiler's race guards** — but review what crosses threads. Flag a `Mutex` guard held across an `.await` point (deadlock / blocks the executor) — `rust/lock-across-await`. Flag `Arc<Mutex<T>>` protecting a large critical section — `rust/shared-mutex-overuse`.
 - **Blocking in async**: flag synchronous blocking calls (`std::fs`, `std::thread::sleep`, blocking DB drivers, heavy CPU work) inside an `async fn` — it stalls the runtime's worker thread. Use the async equivalent or `tokio::task::spawn_blocking`. BLOCKER in a server hot path.
 - **`.await` holding a lock or `RefCell` borrow**: flag — the guard lives across the suspension point.
+- **Edition 2024 drop order**: temporaries in an `if let` scrutinee now drop before the `else` branch, and tail-expression temporaries drop before the block's locals. When a change migrates a crate to edition 2024, check that lock guards and `RefCell` borrows still release where the code assumes — `common/shared-mutable-state`.
 - **Spawned task lifecycle**: flag `tokio::spawn` whose `JoinHandle` is dropped with no supervision or cancellation path — detached tasks leak and swallow panics. Mirror Go's goroutine-leak rule.
 - **`std::sync::Mutex` vs `tokio::sync::Mutex`**: in async code, use the async mutex only when the guard must cross `.await`; otherwise the std mutex is cheaper. Flag the wrong choice.
 - **Channels**: prefer the right primitive (`mpsc`, `oneshot`, `broadcast`). Flag a busy-loop polling a `try_recv()` without backoff.

@@ -2,7 +2,9 @@
 
 These rules supplement the common review framework. Apply them to `.java` files.
 
-Target the current LTS — **Java 25** (GA September 2025) — when recommending modern features. Java 21 remains a widely-deployed LTS; gate suggestions on the project's actual toolchain version rather than assuming the latest.
+Target the current LTS — **Java 25** (GA September 2025) — when recommending modern features. Java 21 remains a widely-deployed LTS; gate suggestions on the project's actual toolchain version rather than assuming the latest. Java 26 and 27 are non-LTS releases; the next LTS is Java 29 (planned September 2027).
+
+Never recommend a preview or incubator feature (anything that needs `--enable-preview` or an `incubator` module). As of Java 27 these include primitive patterns in `switch`/`instanceof`, structured concurrency, lazy constants (formerly `StableValue`), PEM encodings, and the Vector API.
 
 ## Style Standard
 
@@ -21,12 +23,13 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 
 ## Prefer Modern Features
 
+Findings from this table are `common/language-idiom` unless a row's pattern also matches a more specific rule in this reference or the catalog; that rule's ID and severity take precedence.
+
 | Legacy Pattern | Prefer | Since |
 |---|---|---|
 | Verbose data classes (getters, setters, equals, hashCode, toString) | `record` | 17 |
 | `instanceof` + manual cast | Pattern matching `instanceof` | 16 |
 | Long `if/else if` chains on type | `switch` with pattern matching | 21 |
-| `instanceof` / `switch` boxing primitives to match | Primitive patterns in `switch` and `instanceof` | 25 |
 | `ThreadLocal` for request-scoped context | Scoped Values (`ScopedValue`) | 25 |
 | Boilerplate validation/`this(...)` before constructor body | Flexible constructor bodies (statements before `super()`/`this()`) | 25 |
 | Extensive class hierarchies for variants | `sealed` classes/interfaces | 17 |
@@ -81,12 +84,16 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 - **Transaction management**: `@Transactional` on service methods, not repositories or controllers. Flag `@Transactional` on read-only queries without `readOnly = true`.
 - **Avoid `@Component` scanning abuse**: Flag `@Service` / `@Component` on classes that should be explicitly configured as `@Bean` (e.g., third-party wrappers, conditional beans).
 - **Security**: Flag endpoints missing `@PreAuthorize` or Spring Security config. Flag disabled CSRF without justification.
+- **Spring Boot 4 / Framework 7** (when the build declares Boot 4.x):
+  - Boot 4 defaults to Jackson 3 (`tools.jackson` packages, `@JacksonComponent`). Flag new `com.fasterxml.jackson.databind` or `@JsonComponent` usage — `common/deprecated-api`. (`com.fasterxml.jackson.annotation` is unchanged in Jackson 3; do not flag it.)
+  - Retry and concurrency limiting are in the core framework (`@Retryable`, `@ConcurrencyLimit`, enabled by `@EnableResilientMethods`). Flag a new `spring-retry` dependency or a hand-rolled retry loop — `common/language-idiom`.
+  - Null-safety annotations moved to JSpecify. Flag new `org.springframework.lang.Nullable` / `NonNull` — `common/deprecated-api`; prefer `org.jspecify.annotations`.
 
 ## Quarkus
 
 - **CDI over Spring DI**: Use `@Inject`, `@ApplicationScoped`, `@RequestScoped`. Flag Spring-specific annotations in Quarkus code.
 - **Native-image awareness**: Flag reflection-heavy patterns that break GraalVM native compilation. Use `@RegisterForReflection` when necessary.
-- **RESTEasy Reactive**: Prefer reactive endpoints (`@GET` returning `Uni<T>` / `Multi<T>`) for non-blocking I/O. Flag blocking calls without `@Blocking` annotation.
+- **Quarkus REST** (`quarkus-rest`, named RESTEasy Reactive before 3.9): the method signature picks the thread. Endpoints returning `Uni<T>` / `Multi<T>` run on the I/O event loop; endpoints returning plain types run on a worker thread. Flag blocking calls inside `Uni`/`Multi`-returning endpoints that lack `@Blocking` — `common/blocking-in-async`. Do not flag missing `@Blocking` on plain-return endpoints.
 - **Panache**: Prefer Active Record or Repository pattern via Panache over raw JPA `EntityManager` for standard CRUD.
 - **Configuration**: Use `@ConfigProperty` or MicroProfile Config. Flag hardcoded values.
 - **Health and metrics**: Flag missing health checks (`@Liveness`, `@Readiness`) in production services.
@@ -94,12 +101,13 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 
 ## Testing
 
-- Use JUnit 5 (`@Test` from `org.junit.jupiter`). Flag JUnit 4 (`org.junit.Test`) in new code.
+- Use JUnit Jupiter (`@Test` from `org.junit.jupiter`, JUnit 5 or 6). Flag JUnit 4 (`org.junit.Test`) in new code — `common/deprecated-api` on JUnit 6, which deprecates the Vintage engine that runs JUnit 4 tests.
 - Prefer AssertJ (`assertThat`) over JUnit assertions — more readable, better error messages.
 - `@Nested` classes for grouping related tests (replaces descriptive naming conventions).
 - Flag `@SpringBootTest` when a `@WebMvcTest` or `@DataJpaTest` slice would suffice — startup cost.
-- Use `@MockBean` or Mockito `@Mock` + `@InjectMocks`. Flag mock setup that reaches 3+ levels deep — indicates the code under test has too many dependencies.
-- Flag tests without assertions — MAJOR.
+- Use `@MockitoBean` / `@MockitoSpyBean` (Spring Framework 6.2+) or Mockito `@Mock` + `@InjectMocks`. Flag `@MockBean` / `@SpyBean` — `common/deprecated-api` (deprecated in Boot 3.4, removed in Boot 4.0; replace with `@MockitoBean` / `@MockitoSpyBean`). Flag mock setup that reaches 3+ levels deep — indicates the code under test has too many dependencies.
+- On Boot 4, `@SpringBootTest` no longer provides `MockMvc` or `TestRestTemplate` beans. Flag injecting them without `@AutoConfigureMockMvc` / `@AutoConfigureTestRestTemplate` — `common/deprecated-api`.
+- Flag tests without assertions — `common/assertion-free-test`. A test whose only check is "no exception thrown" should say so with `assertDoesNotThrow`.
 - Parameterized tests (`@ParameterizedTest` + `@CsvSource` / `@MethodSource`) for data-driven tests.
 - For Quarkus: use `@QuarkusTest` for integration, `@QuarkusTestResource` for external dependencies.
 
@@ -113,6 +121,8 @@ Do not flag formatting issues that Checkstyle / Spotless / google-java-format wo
 - **Lombok abuse**: `@Data` on JPA entities (breaks equals/hashCode with lazy-loaded fields). Use `@Getter` + `@Setter` + explicit `@EqualsAndHashCode` excluding lazy fields, or use records for DTOs.
 - **Over-abstraction**: `AbstractBaseService<T>` with a single implementation — YAGNI. Create abstractions when the second use case arrives.
 - **Ignoring `java.time`**: Using `Date`, `Calendar`, `Timestamp` in new code. Always use `java.time` types.
+- **Reflective writes to `final` fields**: `Field.setAccessible(true)` followed by `set` on a `final` field warns since Java 26 (JEP 500) and will be denied in a future release. Flag it, and flag `--enable-final-field-mutation` added only to silence the warning — `common/deprecated-api`. Prefer constructor injection or a redesign.
+- **`synchronized` and virtual threads**: Since Java 24 (JEP 491), `synchronized` no longer pins the carrier thread. Do not recommend replacing `synchronized` with `ReentrantLock` solely for virtual-thread friendliness.
 - **Mutable `ThreadLocal` for context**: On Java 25+, prefer immutable `ScopedValue` for request/task-scoped context — it has clearer lifetime semantics and works cleanly with virtual threads and structured concurrency. Flag `ThreadLocal` set-and-forget that risks leaking across pooled threads.
 
 ## Change Risk

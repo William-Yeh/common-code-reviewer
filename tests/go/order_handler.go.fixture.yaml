@@ -3,66 +3,63 @@ language: go
 source: "order_handler.go"
 required:
   - rule: common/sql-injection
-    location: "44-49"
-    rationale: "SQL injection via fmt.Sprintf. User input directly interpolated into SQL. Use parameterized queries ($1, $2)."
-  - rule: common/sql-injection
-    location: "85"
-    rationale: "SQL injection inside N+1 loop. id interpolated into query string."
+    location: "34-39, 71"
+    rationale: "SQL built with fmt.Sprintf twice: request-body values in the INSERT and the row id in the N+1 SELECT (85, second-order). One finding may cover both sites; use parameterized queries ($1, $2)."
   - rule: common/ignored-error
-    location: "38"
+    location: "30"
     rationale: "ShouldBindJSON error ignored. Invalid JSON silently proceeds with zero-value body."
+  - rule: common/missing-input-validation
+    location: "32"
+    rationale: "body[\"customer_id\"].(string) asserts untrusted request input without the comma-ok form or any presence/type check, so a missing field panics. No error is discarded here; the defect is unvalidated input at the boundary."
   - rule: common/ignored-error
-    location: "41"
-    rationale: "Unsafe type assertion body[\"customer_id\"].(string) without comma-ok pattern. Will panic on missing or non-string values."
+    location: "68, 70, 77"
+    rationale: "ListOrders discards three errors: rows.Scan (81), the per-order db.Query via _ (84), and itemRows.Scan (91). Zero-valued rows are returned as data and a nil itemRows panics. One finding may cover the sites together."
   - rule: common/ignored-error
-    location: "81"
-    rationale: "rows.Scan error ignored. Corrupted data silently propagated."
-  - rule: common/ignored-error
-    location: "84"
+    location: "70"
     rationale: "Error discarded with blank identifier _ on N+1 query. Query failures silently produce nil rows."
   - rule: common/resource-leak
-    location: "70"
+    location: "58"
     rationale: "Missing defer rows.Close() after db.Query. Connection leak will exhaust connection pool."
-  - rule: common/shared-mutable-state
-    location: "35"
-    rationale: "God function CreateOrder — handles binding, SQL, caching, and notification. Separate into handler → service → repository."
   - rule: common/god-module
-    location: "19-22"
-    rationale: "Package-level mutable globals: db, orderCache. Inject dependencies instead."
-  - rule: common/n-plus-one-query
-    location: "84-86"
-    rationale: "N+1 query: executing SELECT ... FROM order_items per order inside a loop. Use a JOIN or batch query."
+    location: "28"
+    rationale: "God function CreateOrder — handles binding, SQL, caching, and notification. Separate into handler → service → repository."
+  - rule: common/shared-mutable-state
+    location: "14-18"
+    rationale: "Package-level mutable globals in var ( ... ): db reassigned by InitDB without synchronization, orderCache shared by every request. Inject dependencies instead."
+  - rule: common/n-plus-one-hot-path
+    location: "70-72"
+    rationale: "N+1 query inside the ListOrders gin handler: one SELECT ... FROM order_items per order on every request. Use a JOIN or batch query."
   - rule: common/unbounded-query
-    location: "70"
+    location: "58"
     rationale: "Unbounded SELECT ... FROM orders with no LIMIT or pagination."
   - rule: common/unmanaged-concurrency
-    location: "63"
+    location: "52"
     rationale: "Goroutine go notifyWarehouse(body) without lifecycle management. No errgroup, no context cancellation — goroutine leak."
   - rule: common/weak-type-model
-    location: "36, 106"
+    location: "29, 91"
     rationale: "map[string]interface{} used for request body and throughout. Define typed structs for Order, OrderItem."
-  - rule: common/incomplete-error-handling
-    location: "29-31"
-    rationale: "InitDB logs error but continues execution. Subsequent calls to db will nil-pointer panic. Should return error or fatal."
+  - rule: common/ignored-error
+    location: "20-25"
+    rationale: "InitDB only logs the sql.Open error and returns normally, leaving db nil; execution continues unsafely and the first query panics. Return the error instead."
   - rule: common/sensitive-data-exposure
-    location: "72"
+    location: "60"
     rationale: "Internal error details leaked to client via err.Error() in JSON response. Return generic message, log details."
   - rule: common/ignored-error
-    location: "107"
+    location: "92"
     rationale: "json.Marshal error ignored with blank identifier."
-  - rule: common/unmanaged-concurrency
-    location: "25, 106"
-    rationale: "Missing context.Context parameter on InitDB and notifyWarehouse. Cannot respect timeouts or cancellation."
   - rule: common/missing-timeout
-    location: "110-111"
+    location: "94-95"
     rationale: "No timeout on http.Post — will use http.DefaultClient with no timeout. Can hang indefinitely."
   - rule: common/incomplete-error-handling
-    location: "114"
-    rationale: "Error logged without wrapping: log.Println(err). Use fmt.Errorf(\"notifying warehouse: %w\", err)."
+    location: "44, 97"
+    rationale: "Recoverable failures reported insufficiently: the insert error is replaced by \"failed\" and never logged (54), and the notify error is logged without wrapping or the order id (114)."
   - rule: common/language-idiom
-    location: "30, 114"
-    rationale: "log.Println — consider slog for structured logging (Go 1.21+)."
+    location: "16, 20, 24, 91, 97"
+    rationale: "Legacy idioms: interface{} instead of any (20, 106), function signatures without a leading context.Context (25, 106), and log.Println instead of an injected *slog.Logger (30, 114). One finding may list them together."
   - rule: common/graceful-shutdown
-    location: "120-125"
-    rationale: "No graceful shutdown. gin.Engine returned without http.Server wrapping for Shutdown(ctx)."
-forbidden: []
+    location: "111-113"
+    rationale: "Serve blocks in gin.Engine.Run, which wraps http.ListenAndServe with no http.Server to call Shutdown on and no signal handling, so a deploy or SIGTERM drops in-flight orders mid-request. Build an http.Server and call Shutdown(ctx) from signal.NotifyContext."
+forbidden:
+  - rule: common/n-plus-one-query
+    location: "70-72"
+    rationale: "This N+1 runs inside a gin handler, so it is common/n-plus-one-hot-path; the two N+1 rules are mutually exclusive by request path."

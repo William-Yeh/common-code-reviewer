@@ -3,51 +3,51 @@ language: python
 source: "order_service.py"
 required:
   - rule: common/sql-injection
-    location: "37-41"
+    location: "28-32"
     rationale: "SQL injection via f-string in text(). User input directly interpolated into SQL. Use bound parameters."
   - rule: common/sql-injection
-    location: "81-83"
+    location: "67-69"
     rationale: "SQL injection via f-string in search_orders. Same pattern repeated."
-  - rule: common/sql-injection
-    location: "67"
-    rationale: "SQL injection inside N+1 loop — order.id interpolated into query string."
   - rule: common/ignored-error
-    location: "47-48"
+    location: "37-38"
     rationale: "Bare except: pass — catches and silently discards all exceptions including KeyboardInterrupt and SystemExit."
-  - rule: common/unnecessary-mutation
-    location: "16"
-    rationale: "Mutable default argument tags=[]. Shared across calls — will accumulate values."
-  - rule: common/n-plus-one-query
-    location: "65-68"
-    rationale: "N+1 query pattern: executing a query per order inside a loop. Use a JOIN or selectinload."
+  - rule: common/shared-mutable-state
+    location: "11"
+    rationale: "Mutable default argument tags=[]: one list object is shared across every call and accumulates values. python.md resolves mutable defaults to common/shared-mutable-state (ADR-0006)."
+  - rule: common/n-plus-one-hot-path
+    location: "52-55"
+    rationale: "N+1 query inside the GET /orders route handler: one query per order on every request. Use a JOIN or selectinload."
   - rule: common/unbounded-query
-    location: "61"
+    location: "49"
     rationale: "Unbounded SELECT * FROM orders with no LIMIT or pagination."
   - rule: common/god-module
-    location: "33"
+    location: "26"
     rationale: "God function create_order — does input handling, raw SQL, caching, notification, and validation in one function."
   - rule: common/missing-input-validation
-    location: "33"
+    location: "26"
     rationale: "body: dict instead of a Pydantic BaseModel. No input validation, no schema, no OpenAPI docs."
   - rule: common/blocking-in-async
-    location: "90-93"
+    location: "74-77"
     rationale: "Synchronous requests.post() in a function called from async route. Blocks the event loop. Use httpx or aiohttp."
   - rule: common/shared-mutable-state
-    location: "13"
+    location: "9"
     rationale: "Module-level mutable order_cache = {} — shared mutable state across requests."
   - rule: common/magic-literal
-    location: "51"
+    location: "40"
     rationale: "Magic number 500 — no explanation of business significance."
   - rule: common/language-idiom
-    location: "95"
+    location: "78"
     rationale: "print() in production code — use structured logging."
-  - rule: common/language-idiom
-    location: "90-95"
-    rationale: "HTTP response status not checked. Failures pass silently."
-  - rule: common/missing-timeout
-    location: "90-93"
-    rationale: "No timeout on requests.post() — can hang indefinitely."
   - rule: common/incomplete-error-handling
-    location: "22, 88"
-    rationale: "Missing type hints on public functions get_db and notify_warehouse."
-forbidden: []
+    location: "74-78"
+    rationale: "requests.post's response status is never checked; the code only prints response.status_code, so a 4xx/5xx from the warehouse passes silently. Call raise_for_status()."
+  - rule: common/missing-timeout
+    location: "74-77"
+    rationale: "No timeout on requests.post() — can hang indefinitely."
+  - rule: common/language-idiom
+    location: "16, 73"
+    rationale: "Public functions get_db() and notify_warehouse(order) have no type hints; python.md requires hints on public signatures (e.g. get_db() -> Iterator[Session])."
+forbidden:
+  - rule: common/n-plus-one-query
+    location: "52-55"
+    rationale: "This N+1 runs inside a FastAPI route, so it is common/n-plus-one-hot-path; the two N+1 rules are mutually exclusive by request path."

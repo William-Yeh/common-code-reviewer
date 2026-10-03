@@ -2,52 +2,61 @@ version: 1
 language: rust
 source: "order_handler.rs"
 required:
+  - rule: rust/hot-loop-clone
+    location: "128"
+    rationale: "rules.clone() copies the entire Vec<DiscountRule>, including each String, once per order line; price_after only reads it, so passing rules directly removes every copy."
   - rule: common/sql-injection
-    location: "9"
+    location: "5"
     rationale: "format!(\"... id = '{}'\", order_id) interpolates user input into SQL. Use parameterized queries (sqlx::query! / bind parameters)."
   - rule: common/sql-injection
-    location: "17"
+    location: "11"
     rationale: "status concatenated into the query string. Same fix — bind parameters, never format!."
   - rule: common/command-injection
-    location: "25-27"
+    location: "17-19"
     rationale: "sh -c \"invoice-gen --order {order_id}\" runs user input through a shell. Pass args directly: Command::new(\"invoice-gen\").args([\"--order\", order_id]), no sh -c."
   - rule: common/path-traversal
-    location: "35"
+    location: "26"
     rationale: "User-controlled file_name joined into a path. ../../etc/passwd escapes the dir. Validate/canonicalize and confirm the path stays under /var/receipts."
   - rule: rust/panic-in-library
-    location: "11"
+    location: "6"
     rationale: ".unwrap() on a fallible DB call in library code panics the caller's process. Return Result<Order, _> and propagate with ?."
   - rule: rust/panic-in-library
-    location: "29, 30, 36, 74"
-    rationale: "Pervasive .unwrap()/.expect() on fallible operations (command output, UTF-8, fs read, DB save). Each is a latent panic. Return Result."
+    location: "6, 21, 22, 27, 61"
+    rationale: "Pervasive .unwrap()/.expect() on fallible operations: db.query_one(...).unwrap() (11), Command output and String::from_utf8 (29, 30), std::fs::read (36), db.save (74). One pattern across the file, so a single finding anchored at any of these sites covers it. Return Result."
   - rule: rust/blocking-in-async
-    location: "65"
+    location: "53"
     rationale: "std::fs::read_to_string is a blocking syscall inside async fn — it stalls the runtime worker thread. Use tokio::fs or spawn_blocking."
   - rule: rust/lock-across-await
-    location: "57-60"
+    location: "46-49"
     rationale: "state.lock() guard is held across db.flush_metrics().await. With a std Mutex this blocks the executor and risks deadlock. Drop the guard before awaiting, or use tokio::sync::Mutex scoped tightly."
   - rule: common/n-plus-one-query
-    location: "42-46"
+    location: "32-36"
     rationale: "One query_one per order inside the loop. Batch with a single WHERE customer_id IN (...) query."
   - rule: common/unbounded-query
-    location: "17-19"
+    location: "11-12"
     rationale: "orders_by_status has no LIMIT/pagination — loads the entire matching set into memory."
   - rule: common/god-module
-    location: "69-77"
+    location: "56-64"
     rationale: "process_order validates, charges payment, persists, and emails. Four responsibilities. Split into focused units."
   - rule: rust/discarded-result
-    location: "73"
+    location: "60"
     rationale: "let _ = charge_card(&order); discards the payment Result. A failed charge proceeds to save+confirm as success."
   - rule: common/sensitive-data-exposure
-    location: "81"
+    location: "67"
     rationale: "Full card_number written to stdout/logs. Mask all but the last 4 digits, or omit."
   - rule: common/hot-path-allocation
-    location: "48"
+    location: "38"
     rationale: "order.clone() clones an owned Order every iteration. Restructure to move or borrow instead of cloning in the hot loop."
   - rule: common/erased-failure
-    location: "69-71"
+    location: "56-58"
     rationale: "process_order returns bool, erasing the failure reason. Return Result<(), OrderError> so callers know *why* it failed."
   - rule: common/magic-literal
-    location: "87"
+    location: "72"
     rationale: "30 (stale threshold in days) is unexplained. Extract const STALE_AFTER_DAYS: u64 = 30;."
-forbidden: []
+forbidden:
+  - rule: common/n-plus-one-hot-path
+    location: "32-36"
+    rationale: "enrich_orders is a plain async function with no visible handler, route, or RPC registration; nothing shows it runs per request, so this N+1 stays common/n-plus-one-query."
+  - rule: rust/clone-to-compile
+    location: "128"
+    rationale: "A whole Vec cloned on every loop iteration is rust/hot-loop-clone; the two clone rules do not stack on one site."

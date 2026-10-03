@@ -3,57 +3,57 @@ language: python
 source: "user_management.py"
 required:
   - rule: common/command-injection
-    location: "177-182"
+    location: "156-161"
     rationale: "subprocess.run with shell=True and unsanitized user input. Attacker can inject arbitrary commands via username or output_format."
   - rule: common/path-traversal
-    location: "189-191"
+    location: "167-169"
     rationale: "User-controlled user_id used directly in file path. Attacker can read arbitrary files."
   - rule: common/authorization-gap
-    location: "195-197"
+    location: "172-174"
     rationale: "delete_user performs no authorization check. Any user can delete any other user."
   - rule: common/open-closed-violation
-    location: "55-65"
+    location: "49-59"
     rationale: "get_permissions uses if/elif chain on role string. Every new role requires modifying this function. Use a role→permissions mapping dict or strategy."
   - rule: common/unhandled-variant
-    location: "55-65"
+    location: "49-59"
     rationale: "Missing else clause — returns None implicitly for unknown roles. Should raise ValueError or return empty list."
   - rule: common/liskov-violation
-    location: "47-50"
+    location: "42-45"
     rationale: "EmployeeDiscount.calculate() returns 50.0 (absolute dollars) instead of a fraction between 0-1. Callers using total * (1 - discount) get negative prices."
   - rule: common/interface-segregation
-    location: "14-30"
+    location: "10-26"
     rationale: "IUserRepository ABC has 8 abstract methods. A read-only repository implementation would need to stub 6 methods. Split into ReadRepository, WriteRepository, ReportRepository."
   - rule: common/anemic-domain
-    location: "72-80"
+    location: "64-72"
     rationale: "User class is a pure data bag. All behavior (permissions, deactivation, validation) lives in external functions. Move domain logic into the entity."
   - rule: common/hidden-side-effect
-    location: "94-95, 98-99"
-    rationale: "validate_user_data writes to /var/log/validation.log and sends HTTP analytics. Function name implies pure validation."
+    location: "76, 84-85, 87-88"
+    rationale: "validate_user_data (named and typed as a pure bool predicate) writes to /var/log/validation.log and POSTs analytics."
   - rule: common/hard-coded-dependency
-    location: "107-108"
+    location: "95-96"
     rationale: "load_config hardcodes filesystem path — cannot test without real /etc/app/config.json. Inject config path or config object."
   - rule: common/nondeterministic-dependency
-    location: "116"
+    location: "102"
     rationale: "deactivate_inactive_users uses datetime.now() directly. Non-deterministic — tests break across time boundaries. Inject a clock."
   - rule: common/deep-nesting
-    location: "114-121"
+    location: "101-107"
     rationale: "Deep nesting — 4 levels of if in deactivate_inactive_users. Flatten with early continue or extract a should_deactivate predicate."
-  - rule: common/duplicated-logic
-    location: "130-139"
-    rationale: "Code duplication — role-counting logic with if/elif chain. Use Counter(u.role for u in users)."
+  - rule: common/imperative-transformation
+    location: "114-123"
+    rationale: "Three counters plus an if/elif ladder over user.role compute what Counter(u.role for u in users) states directly. The counting appears nowhere else in the file, so it is not duplicated logic."
   - rule: common/mixed-abstraction
-    location: "125"
+    location: "110"
     rationale: "Mixed abstraction levels in generate_user_report — config loading, counting, formatting, file I/O all in one method."
   - rule: common/unclear-name
-    location: "153-162"
+    location: "135-143"
     rationale: "Bad naming: proc, d, tmp, x, flag. Not intention-revealing."
   - rule: common/dead-code
-    location: "166-171"
+    location: "146-151"
     rationale: "Dead code: _old_send_welcome_email is never called. Remove it."
   - rule: common/duplicated-logic
-    location: "160"
+    location: "141"
     rationale: "Duplicated email validation logic — same \"@\" in email check as in validate_user_data."
   - rule: common/weak-type-model
-    location: "73"
-    rationale: "role: str and status: str — use Literal[\"admin\", \"editor\", ...] or StrEnum."
+    location: "64-65, 69-70"
+    rationale: "class User takes role: str and status: str and stores them as free-form strings; use StrEnum or Literal so invalid values cannot be constructed."
 forbidden: []

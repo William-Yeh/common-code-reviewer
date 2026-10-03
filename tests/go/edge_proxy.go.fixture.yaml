@@ -1,0 +1,17 @@
+version: 1
+language: go
+source: "edge_proxy.go"
+required:
+  - rule: go/panic-in-library
+    location: "59"
+    rationale: "PartnerID is exported library code and panics on a missing request header, which is client-controlled input; the caller's server crashes or its recover middleware hides the error. Return (string, error) instead."
+  - rule: common/deprecated-api
+    location: "29-33"
+    rationale: "The file builds only with Go 1.26+ (//go:build go1.26), and Go 1.26 deprecates ReverseProxy.Director in favor of Rewrite: a client can strip the X-Partner-ID header the Director adds by naming it hop-by-hop."
+  - rule: common/deprecated-api
+    location: "39"
+    rationale: "Go 1.26 deprecates rsa.EncryptPKCS1v15 as unsafe padding; under the go1.26 build constraint the toolchain is known to carry that deprecation. Use rsa.EncryptOAEP."
+forbidden:
+  - rule: common/deprecated-api
+    location: "48-49"
+    rationale: "errors.As is superseded by errors.AsType in Go 1.26 but not deprecated. At most it is common/language-idiom; flagging it as deprecated-api confuses the two rules."

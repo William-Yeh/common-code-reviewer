@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1
+# Report worker: a statically linked Go binary run on a schedule.
+
+FROM golang:1.27-alpine@sha256:4f7a1c0d9e2b3a5f6c8d7e9b0a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+RUN CGO_ENABLED=0 go build -trimpath -o /out/report-worker ./cmd/worker
+
+FROM ubuntu:24.04@sha256:0e5e4a57c2499249aafc3b40fcd541e9a456aab7296681a3994d631587203f97 AS runtime
+WORKDIR /app
+COPY --from=build /out/report-worker /app/report-worker
+USER 10001:10001
+HEALTHCHECK CMD ["/app/report-worker", "-healthcheck"]
+ENTRYPOINT ["/app/report-worker"]

@@ -3,6 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "PyYAML==6.0.2",
+#   "tree-sitter-language-pack==1.20.0",
 # ]
 # ///
 
@@ -30,6 +31,8 @@ RULE_ROW = re.compile(
     r"^\|\s*`(?P<id>[a-z0-9]+/[a-z0-9-]+)`\s*\|"
     r"\s*(?P<severity>BLOCKER|MAJOR|MINOR|NIT)\s*\|"
 )
+# tree-sitter grammars that differ from the languages.yaml id, keyed by file suffix.
+GRAMMAR_BY_SUFFIX = {".tsx": "tsx", ".jsx": "tsx"}
 LOCATION = re.compile(r"^\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*$")
 CHANGE_RISK_SECTION = "## Change Risk"
 SCORING_PROFILE_SLOTS = (
@@ -475,6 +478,27 @@ def coverage_evidence_problem(evidence: Path, coverage_name: str, source_name: s
     return None
 
 
+def syntax_error_lines(node) -> list[int]:
+    """1-based lines of ERROR and MISSING nodes under a tree-sitter node."""
+    if not node.has_error:
+        return []
+    own = [node.start_point[0] + 1] if node.type == "ERROR" or node.is_missing else []
+    return own + [line for child in node.children for line in syntax_error_lines(child)]
+
+
+def syntax_problem(source: bytes, source_name: str, language_id: str) -> str | None:
+    """Why a fixture source fails to parse, or None. Unresolved symbols are fine."""
+    # Imported here so run_conformance.py, which reuses this module, needs no parser.
+    from tree_sitter_language_pack import get_parser
+
+    grammar = GRAMMAR_BY_SUFFIX.get(Path(source_name).suffix, language_id)
+    lines = sorted(set(syntax_error_lines(get_parser(grammar).parse(source).root_node)))
+    if not lines:
+        return None
+    plural = "s" if len(lines) > 1 else ""
+    return f"source does not parse as {grammar}: syntax error{plural} at line{plural} {', '.join(map(str, lines))}"
+
+
 def fixture_coverage_problem(fixture: dict[str, object], path: Path, source_name: str) -> str | None:
     coverage_name = fixture.get("coverage")
     if coverage_name is None:
@@ -561,6 +585,8 @@ def validate_fixture(
     problems = fixture_header_problems(fixture, language, path.name, source.name)
     if coverage_problem := fixture_coverage_problem(fixture, path, source.name):
         problems.append(coverage_problem)
+    if parse_problem := syntax_problem(source.read_bytes(), source.name, str(language["id"])):
+        problems.append(parse_problem)
     required, forbidden, list_problems = expectation_lists(fixture)
     report(label, [*problems, *list_problems])
     if not required:

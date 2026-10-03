@@ -37,8 +37,59 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Coverage Evidence is at tests/python/lcov.info", prompt)
         self.assertNotIn("No Coverage Evidence", prompt)
 
+    def test_prompt_discounts_the_harness_tests_directory(self) -> None:
+        # Scoring Profiles treat paths under tests/ as test files, and every fixture lives there;
+        # the reviewer must judge from the file's own name and content (some fixtures are tests).
+        prompt = prompt_for(self.FIXTURE_PATH, {"language": "python", "source": "pricing_engine.py"})
+        self.assertIn("tests/python/ is this harness's fixture directory", prompt)
+        self.assertIn("own name and content", prompt)
+
 
 class FindingParserTests(unittest.TestCase):
+    def finding_at(self, file_line: str) -> list[Finding]:
+        return parse_findings(
+            f"### [MAJOR] Issue\n**File:** {file_line}\n**Rule:** `common/god-module`\n"
+        )
+
+    def test_extra_sites_after_the_primary_location_are_merged(self) -> None:
+        # Shapes the reviewer produced in the 2026-10-02 live run.
+        cases = {
+            "`tests/x.go:5`, also `:12`": "5, 12",
+            "`tests/x.go:19` (also `:24`, `:25`)": "19, 24, 25",
+            "`tests/x.go:54` (also `:61`, `:88-91`)": "54, 61, 88-91",
+            "`tests/x.go:9` (same pattern at `:17`)": "9, 17",
+        }
+        for file_line, location in cases.items():
+            with self.subTest(file_line=file_line):
+                self.assertEqual(
+                    self.finding_at(file_line),
+                    [Finding("common/god-module", "MAJOR", "tests/x.go", location)],
+                )
+
+    def test_primary_location_is_the_first_span_that_carries_a_line(self) -> None:
+        # Verbatim from the 2026-10-03 live run: the reviewer corrected its own path mid-line.
+        file_line = (
+            "`src/order_service.py` is not the path. "
+            "The file is `tests/python/order_service.py:29-31, 54, 68`"
+        )
+        self.assertEqual(
+            self.finding_at(file_line),
+            [Finding("common/god-module", "MAJOR", "tests/python/order_service.py", "29-31, 54, 68")],
+        )
+
+    def test_unparseable_file_line_never_borrows_the_next_finding(self) -> None:
+        markdown = (
+            "### [BLOCKER] First\n**File:** see below\n**Rule:** `common/sql-injection`\n\n"
+            "### [NIT] Second\n**File:** `tests/x.go:3`\n**Rule:** `common/style-naming`\n"
+        )
+        self.assertEqual(
+            parse_findings(markdown),
+            [
+                Finding("common/sql-injection", "BLOCKER", "see below", None),
+                Finding("common/style-naming", "NIT", "tests/x.go", "3"),
+            ],
+        )
+
     def test_parses_normal_markdown_interface(self) -> None:
         markdown = """\
 ### [BLOCKER] SQL injection

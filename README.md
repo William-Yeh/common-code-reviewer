@@ -72,7 +72,7 @@ skill.
 <!-- BEGIN GENERATED LANGUAGES -->
 | Language | Frameworks | Style Standard |
 |---|---|---|
-| TypeScript/JavaScript | React, NestJS, Next.js App Router | ESLint / Airbnb |
+| TypeScript/JavaScript | React, NestJS, Next.js App Router | ESLint + typescript-eslint |
 | Python | FastAPI, SQLAlchemy | PEP 8 / 484 / 585 |
 | Java | Spring Boot, Quarkus | Google Java Style |
 | Go | stdlib, Gin, gRPC | Effective Go |
@@ -168,16 +168,32 @@ To add a new language:
    Profile slots: Scored Units, Decision Points, Test Files, Coverage Evidence,
    and Oracle Deviations. The Decision Points slot needs one row for each
    category in the shared decision-point table in `SKILL.md`.
+   Every instruction that can produce a finding names the rule it resolves
+   to, such as `` — `common/ignored-error` ``, and never states a severity of
+   its own (ADR-0006). If the language has behavior no shared rule covers,
+   add a `## Language-Owned Review Rules` table with `<language>/<rule>` IDs,
+   as `go.md`, `rust.md`, and `dockerfile.md` do.
 2. Add the language to `skill/languages.yaml`. Set `scored` to `true` or
    `false`, and list the language's `comment_prefixes`. The generated Language
    Detection table picks up the `scored` flag so the reviewer can see it.
 3. Put a source file and a matching `*.fixture.yaml` under `tests/<language>/`.
-   Add as many pairs as you need.
+   Add as many pairs as you need. The source must parse with the
+   `tree-sitter-language-pack` grammar named after the language's id (add a
+   suffix mapping to `GRAMMAR_BY_SUFFIX` in `validate_structure.py` when they
+   differ); it may reference code outside the file (ADR-0007).
+   Keep hints such as `[ISSUE: ...]` comments out of new sources, since the
+   reviewer reads them.
 4. Run `uv run tests/scripts/sync_generated.py` to regenerate the tables.
 
-Two checks apply. Every language-specific review rule must appear in the
-`required` list of at least one fixture, and every scored language must have a
-complete Scoring Profile.
+To add a review rule, add its row to the catalog in `SKILL.md` (shared rules)
+or to the reference's Language-Owned table, then give it a required finding in
+a fixture. When an existing rule covers the same code at a different severity,
+separate the two by a condition visible in the code. Then add a `forbidden`
+entry for the other rule at the same location.
+
+Three checks apply. Every review rule must appear in the `required` list of at
+least one fixture, every fixture source must parse, and every scored language
+must have a complete Scoring Profile.
 
 ## Tests
 
@@ -194,7 +210,10 @@ catalog agree with each other, that the detection patterns are well-formed, and
 that the derived coverage figures are correct. They also check each fixture:
 every location must point at a line of code rather than a blank or comment
 line, and when a fixture declares a coverage report, that report must actually
-cover the fixture's source file.
+cover the fixture's source file. Every fixture source must also parse cleanly
+with its tree-sitter grammar. Fixtures are excerpts, so references to types and
+packages outside the file are fine; a syntax error is not, because it shifts
+what the reviewer reads away from the fixture's line numbers.
 
 ```bash
 uv run tests/scripts/validate_structure.py
@@ -224,14 +243,14 @@ repository, it lets the scripts be scored on real coverage instead of the worst
 case. Regenerate it after changing a script or its tests:
 
 ```bash
-uv run --with coverage --with pyyaml -- coverage run \
+uv run --with coverage --with pyyaml --with tree-sitter-language-pack==1.20.0 -- coverage run \
   --include='tests/scripts/validate_structure.py,tests/scripts/run_conformance.py,tests/scripts/sync_generated.py' \
   -m unittest discover -s tests/scripts -p 'test_*.py'
 uv run --with coverage -- coverage lcov -o tests/scripts/lcov.info && rm .coverage
 ```
 
 <!-- BEGIN GENERATED COVERAGE -->
-The Conformance Fixtures cover **82/82 Review Rules (100%)**. See
+The Conformance Fixtures cover **88/88 Review Rules (100%)**. See
 `tests/COVERAGE.md` for the derived evidence.
 <!-- END GENERATED COVERAGE -->
 
@@ -248,6 +267,86 @@ uv run tests/scripts/run_conformance.py --model sonnet
 ```
 
 ## Changelog
+
+### v1.5.0 (2026-10-02)
+
+- Refreshed all six language references against the current toolchains and
+  their primary sources: Java 27 (25 is still the LTS), Python 3.14 and
+  3.15, Go 1.27, Rust 1.99 and edition 2024, TypeScript 6.0/7.0 with Next.js
+  16, React 19.2 and ESLint 10, and the Dockerfile 1.x frontend
+- Added `common/deprecated-api` (MAJOR) for code or configuration that uses
+  an API the project's own toolchain deprecates or has removed, with the
+  `tests/go/edge_proxy.go` fixture
+- Fixed advice that was wrong rather than stale:
+  - Java listed primitive patterns as available since 25. They are still a
+    preview feature (fifth preview in 27), and the reference now forbids
+    recommending previews
+  - Rust called a panic across FFI undefined behavior. Since 1.81 it aborts
+  - Java recommended `@MockBean` (removed in Boot 4.0)
+  - TypeScript recommended the Airbnb config (unusable under ESLint 10),
+    `useMemo` and stable JSX props (counterproductive under React Compiler),
+    and `fetch` cache options (superseded by Next.js 16 `'use cache'`)
+  - Python had the `NamedTuple` row backwards, required `response_model`
+    on every FastAPI route, and steered toward LBYL over EAFP
+  - Go recommended `errors.As` over `errors.AsType`
+  - Dockerfile rated `ADD` for local files both MINOR and NIT, and
+    discouraged `ADD --checksum` for remote artifacts
+- Every new instruction names the catalogued rule it resolves to, as
+  ADR-0003 requires. A "Prefer Modern Features" row defers to a more
+  specific rule when one matches, so a goroutine leak or a mutable default
+  argument keeps its own severity instead of dropping to
+  `common/language-idiom`
+- A missing `// SAFETY:` comment now resolves to `rust/unsafe-without-safety`
+  (BLOCKER) instead of an uncatalogued MAJOR, and the Rust mutex guidance
+  names `rust/lock-across-await` and `rust/shared-mutex-overuse` separately
+- Resolved every inline severity in the references that disagreed with the
+  catalog or named no rule:
+  - New rules: `common/n-plus-one-hot-path` (BLOCKER, an N+1 inside a
+    request handler; `common/n-plus-one-query` now covers the rest),
+    `common/assertion-free-test` (MAJOR), `go/panic-in-library` (BLOCKER,
+    Go's first language-owned rule), `rust/hot-loop-clone` (MAJOR), and
+    `dockerfile/heavy-runtime-base` (MAJOR)
+  - Aligned to their catalog rules: mutable default arguments, goroutines
+    without cancellation, double type assertions (`as unknown as T`), and
+    `http.Server` and `EXPOSE` defaults (now `common/insecure-default`)
+  - Removed guidance no rule could carry: `.proto` field changes (no
+    Protobuf detection), Kubernetes capability hints, RUN layer counting,
+    and the ~20-line function heuristic
+- New fixtures: `tests/java/InvoiceServiceTest.java` and
+  `tests/dockerfile/Dockerfile.worker`; the Go, Python, and Rust order
+  fixtures now separate request-path N+1 queries from the rest
+- `validate_structure.py` now parses every fixture source with tree-sitter
+  (`tree-sitter-language-pack`, run through `uv`, so no JDK, Go, Rust, or Node
+  toolchain is needed) and fails on syntax errors with their line numbers
+- Live conformance with sonnet (2026-10-02, $2.00) cut severity drift from
+  about 15% to 0.4% of findings, with no forbidden finding in any fixture.
+  Fixes that run prompted:
+  - Removed the 235 `[ISSUE: ...]` hint comments and file headers that told
+    the reviewer what to find, and remapped every fixture location to the
+    unchanged code
+  - Triaged the 51 remaining misses in the older fixtures against the
+    catalog: widened locations to every genuine site, remapped rules whose
+    definition fits better, dropped expectations the code doesn't support,
+    and kept genuine reviewer misses as signal. Two weak expectations
+    (`graceful-shutdown`, `confused-build-runtime-config`) now point at code
+    that actually shows the problem
+  - The conformance parser no longer drops a finding whose File line lists
+    extra sites (`` `file:9` (also `:17`) ``), and an unparseable File line
+    can no longer borrow the next finding's rule. `SKILL.md` now names the
+    multi-site form: `path/to/file.ext:12, 30-32`
+  - The runner tells the reviewer that `tests/<lang>/` is the harness's
+    fixture directory, so Scoring Profiles that treat `tests/` paths as test
+    files no longer skip every fixture
+  - Renamed `Dockerfile.app` to `Dockerfile.web`: Claude Code's Read tool
+    rejects files ending in `.app` as binary
+  - A second run on the cleaned fixtures (2026-10-03, $2.03), re-scored with
+    the final parser: 30 of 211 required findings missed, 8 of 19 fixtures
+    passing, no severity drift, no forbidden findings. The remaining misses
+    are mostly a different but defensible rule at the right line; they stay
+    as recorded expectations instead of being fitted to one model's choices
+- Recorded the decisions as ADR-0006 (reference severities resolve through
+  the catalog) and ADR-0007 (fixture sources must parse, not compile)
+- Rule coverage: **88/88 rules (100%)**: 59 common, 1 Go, 12 Rust, 16 Dockerfile
 
 ### v1.4.0 (2026-09-05)
 

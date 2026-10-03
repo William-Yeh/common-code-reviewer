@@ -2,6 +2,12 @@
 
 These rules supplement the common review framework. Apply them to `.go` files.
 
+## Language-Owned Review Rules
+
+| Rule ID | Severity | Review Rule |
+|---|---|---|
+| `go/panic-in-library` | BLOCKER | Library code panics on a recoverable condition instead of returning an error. |
+
 ## Style Standard
 
 Follow **Effective Go** and **Go Code Review Comments** (the official standards). Additionally:
@@ -18,9 +24,24 @@ Follow **Effective Go** and **Go Code Review Comments** (the official standards)
 
 ## Prefer Modern Features
 
+Findings from this table are `common/language-idiom` unless a row's pattern also matches a more specific rule in this reference or the catalog; that rule's ID and severity take precedence. Gate each row on the `go` directive in `go.mod`. Since 1.26, `go fix ./...` applies most of these rewrites automatically (the modernizers, plus `//go:fix inline` directives for API migrations). When several rows fire in one change, recommend running it instead of listing each occurrence.
+
 | Legacy Pattern | Prefer | Since |
 |---|---|---|
-| Manual error type switching | `errors.Is()`, `errors.As()` | 1.13 |
+| Manual error type switching | `errors.Is()` | 1.13 |
+| `var target *E; errors.As(err, &target)` | `target, ok := errors.AsType[*E](err)` | 1.26 |
+| Temporary variable only to take its address (`v := f(); p := &v`) | `new(f())` | 1.26 |
+| `strings.LastIndex` + slicing around a separator | `strings.CutLast` / `bytes.CutLast` | 1.27 |
+| Third-party UUID module (`google/uuid`, `gofrs/uuid`) in new code | stdlib `uuid` package | 1.27 |
+| `for i := 0; i < n; i++` with `i` used only as a counter | `for i := range n` | 1.22 |
+| `x := x` copies of loop variables | delete them (per-iteration loop variables) | 1.22 |
+| `math/rand` | `math/rand/v2` | 1.22 |
+| Callback-style or hand-rolled iterator APIs | `iter.Seq` / `iter.Seq2`, with `slices.Collect`, `slices.Sorted`, `maps.Keys` | 1.23 |
+| `strings.Split` / `strings.Fields` consumed only by a `range` loop | `strings.SplitSeq`, `strings.FieldsSeq`, `strings.Lines` | 1.24 |
+| `omitempty` on struct or `time.Time` fields (never omits them) | `omitzero` | 1.24 |
+| `runtime.SetFinalizer` | `runtime.AddCleanup` | 1.24 |
+| `tools.go` with blank imports to pin tool versions | `tool` directive in `go.mod` (`go get -tool`) | 1.24 |
+| `fmt.Sprintf("%s:%d", host, port)` for dial addresses (breaks IPv6) | `net.JoinHostPort` | — |
 | `interface{}` | `any` (type alias) | 1.18 |
 | Manual sort with `sort.Slice` | `slices.Sort`, `slices.SortFunc` | 1.21 |
 | Manual min/max | `min()`, `max()` builtins | 1.21 |
@@ -40,7 +61,7 @@ Follow **Effective Go** and **Go Code Review Comments** (the official standards)
 - **Define interfaces at the consumer, not the provider**: The package that *uses* the interface should define it. Flag interfaces defined next to their only implementation.
 - **Accept interfaces, return structs**: Functions should accept interfaces for flexibility but return concrete types for clarity.
 - **Struct embedding**: Use for composition, not inheritance. Flag embedded types that expose methods the outer type shouldn't have.
-- **Generics**: Use for containers, algorithms, and utility functions. Flag generic code where a concrete type or interface would be simpler — don't over-generalize.
+- **Generics**: Use for containers, algorithms, and utility functions. Flag generic code where a concrete type or interface would be simpler — don't over-generalize. Since 1.27 a method may declare its own type parameters (`func (s *Set[T]) Map[U any](f func(T) U) *Set[U]`); do not flag that as a compile error. Interface methods still cannot declare type parameters, and a generic method cannot satisfy an interface method.
 - **Type aliases vs definitions**: `type UserID string` (new type, prevents mixing) vs `type UserID = string` (alias, interchangeable). Flag aliases where a distinct type would provide safety.
 
 ## Functional Patterns
@@ -61,21 +82,29 @@ Go's explicit error handling is a feature, not a problem. Review it carefully:
 - **Never** `_ = someFunc()` that returns an error — BLOCKER unless explicitly justified
 - **Never** bare `if err != nil { return err }` without wrapping context — use `fmt.Errorf("doing X: %w", err)` for wrapped errors
 - Flag error messages starting with uppercase or ending with punctuation — Go convention is lowercase, no period
-- Flag `panic` in library code — BLOCKER. Panics are for truly unrecoverable situations in `main` or `init`.
+- Flag `panic` in library code on input-derived or recoverable conditions — `go/panic-in-library`. Return an `error` instead. Panics belong in `main`, in `init`, and in `Must*` helpers whose argument is a compile-time constant (`regexp.MustCompile`).
 - Flag `log.Fatal` / `os.Exit` in library code — it kills the process. Only allowed in `main`.
 - Encourage sentinel errors (`var ErrNotFound = errors.New(...)`) for expected failure modes
 - Encourage custom error types implementing `error` for errors carrying structured data
 - Flag `errors.New` in hot paths — pre-allocate as package-level vars
-- Use `errors.Is()` and `errors.As()` for checking — not string comparison or type assertions
+- Use `errors.Is()` and `errors.AsType[E]()` (1.26+; `errors.As()` before that) for checking — not string comparison or type assertions
 
 ## Standard Library HTTP (`net/http`)
 
 - Use `http.NewServeMux` (1.22+) with method-based routing: `mux.HandleFunc("GET /users/{id}", handler)`
 - Flag `http.DefaultServeMux` in production — it's a global, shared across packages
-- Set timeouts on `http.Server`: `ReadTimeout`, `WriteTimeout`, `IdleTimeout`. Flag zero-value servers — MAJOR (slowloris risk).
+- Set timeouts on `http.Server`: `ReadTimeout`, `WriteTimeout`, `IdleTimeout`. Flag zero-value servers — `common/insecure-default` (slowloris risk).
 - Flag handlers that don't check `r.Context().Done()` for long-running operations
 - Use `http.MaxBytesReader` on request bodies — flag unbounded `io.ReadAll(r.Body)` (DoS risk)
 - Middleware: use `func(http.Handler) http.Handler` pattern. Flag middleware that doesn't call `next.ServeHTTP`.
+- **CSRF**: Since 1.25, `http.CrossOriginProtection` rejects unsafe cross-origin browser requests using Fetch metadata, with no tokens. Flag cookie-authenticated state-changing endpoints with no CSRF protection — `common/insecure-default`. Prefer `CrossOriginProtection` over a hand-rolled token check — `common/language-idiom`.
+- **User-supplied paths**: Flag `filepath.Join(base, userPath)` followed by `os.Open` — `common/path-traversal`. Since 1.24, open files through `os.OpenRoot(base)` / `os.Root`, which rejects paths that escape the root, including through symlinks.
+- **Reverse proxies**: Flag `httputil.ReverseProxy.Director` — `common/deprecated-api` (deprecated in 1.26: a client can strip headers the `Director` adds by naming them hop-by-hop). Use `Rewrite`.
+
+## Toolchain and Security Deprecations
+
+- Flag `rsa.EncryptPKCS1v15`, `rsa.DecryptPKCS1v15`, and `rsa.DecryptPKCS1v15SessionKey` — `common/deprecated-api` (deprecated in 1.26 as unsafe padding). Use `rsa.EncryptOAEP` / `DecryptOAEP`.
+- Flag `godebug` lines in `go.mod` or `//go:debug` comments that pin a removed setting to its old value — `common/deprecated-api`. From 1.27 the `go` command fails the build on them; the removed settings are `asynctimerchan`, `gotypesalias`, `tls10server`, `tls3des`, `tlsrsakex`, `tlsunsafeekm`, and `x509keypairleaf`.
 
 ## Gin
 
@@ -93,13 +122,12 @@ Go's explicit error handling is a feature, not a problem. Review it carefully:
 - **Interceptors**: Use interceptors for cross-cutting concerns (auth, logging, tracing). Flag auth checks in individual RPC methods.
 - **Streaming**: Flag server-side streams that don't check `stream.Context().Err()` — clients may disconnect.
 - **Deadlines**: Flag RPC calls without deadline/timeout set on the context — `context.WithTimeout`. Unbounded RPCs can hang forever.
-- **Proto backwards compatibility**: Flag removal or renumbering of fields in `.proto` files — BLOCKER. Use `reserved` for removed fields.
 
 ## Concurrency
 
 Go concurrency requires careful review:
 
-- **Goroutine lifecycle**: Every `go func()` must have a clear termination path. Flag goroutines without cancellation (context) or done channels — goroutine leak risk (BLOCKER).
+- **Goroutine lifecycle**: Every `go func()` must have a clear termination path. Flag goroutines without cancellation (context) or done channels — goroutine leak risk, `common/unmanaged-concurrency`.
 - **Prefer `errgroup.Group`** over bare goroutine spawning — manages lifecycle, collects errors, propagates cancellation.
 - **Channel direction**: Function parameters should specify direction (`chan<- T` or `<-chan T`). Flag bidirectional channels in function signatures.
 - **Mutex scope**: Keep critical sections small. Flag mutexes protecting entire function bodies — rethink the design.
@@ -107,6 +135,7 @@ Go concurrency requires careful review:
 - **Race conditions**: Flag shared state accessed from goroutines without synchronization. Suggest `-race` flag in tests.
 - **Context propagation**: Pass `context.Context` through the call chain. Flag functions that create their own `context.Background()` when a caller could provide one.
 - **Select with default**: Flag `select` with `default` in loops without a sleep/backoff — busy loop (CPU burn).
+- **Leak evidence**: Since 1.27 the `goroutineleak` profile (`runtime/pprof`, `/debug/pprof/goroutineleak`) reports leaked goroutines. When a leak finding is disputed, point to it as the way to confirm.
 
 ## Testing
 
@@ -115,7 +144,8 @@ Go concurrency requires careful review:
 - `t.Parallel()`: encourage for independent tests. Flag tests that share mutable state.
 - Prefer stdlib `testing` over testify when possible. If using testify, use `assert` (continues) vs `require` (stops) deliberately.
 - `t.Cleanup()` for teardown instead of `defer` — survives subtests.
-- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization. For testing concurrent code with virtual time, prefer `testing/synctest` (GA in 1.25) over real sleeps.
+- Since 1.24: use `t.Context()` instead of `context.Background()` in tests, `t.Chdir` instead of `os.Chdir`, and `for b.Loop()` instead of `for i := 0; i < b.N; i++` in benchmarks — `common/language-idiom`.
+- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization. For testing concurrent code with virtual time, prefer `testing/synctest` (GA in 1.25) over real sleeps; since 1.27, `synctest.Sleep` combines `time.Sleep` and `synctest.Wait`.
 - For HTTP handlers: use `httptest.NewRecorder()` and `httptest.NewRequest()`.
 - Flag tests that depend on network, filesystem, or environment without build tags or skip conditions.
 

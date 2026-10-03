@@ -26,12 +26,16 @@ from validate_structure import RULE_ROW, location_parts
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SKILL_DIR = REPO_ROOT / "skill"
 FIXTURE_GLOB = "*/*.fixture.yaml"
+# Lazy gaps never cross into the next finding's heading.
+WITHIN_FINDING = r"(?:(?!^###\s).)*?"
 FINDING = re.compile(
-    r"^###\s+\[(?P<severity>BLOCKER|MAJOR|MINOR|NIT)\].*?"
-    r"^\*\*File:\*\*\s*`?(?P<file>[^`\n]+?)`?\s*$.*?"
-    r"^\*\*Rule:\*\*\s*`?(?P<rule>[a-z0-9]+/[a-z0-9-]+)`?\s*$",
+    r"^###\s+\[(?P<severity>BLOCKER|MAJOR|MINOR|NIT)\]" + WITHIN_FINDING
+    + r"^\*\*File:\*\*[ \t]*(?P<file>[^\n]*?)[ \t]*$" + WITHIN_FINDING
+    + r"^\*\*Rule:\*\*\s*`?(?P<rule>[a-z0-9]+/[a-z0-9-]+)`?\s*$",
     re.MULTILINE | re.DOTALL,
 )
+CODE_SPAN = re.compile(r"`([^`]+)`")
+EXTRA_SITE = re.compile(r":(?P<location>\d+(?:-\d+)?)")
 FILE_LOCATION = re.compile(r"^(?P<file>.+?)(?::(?P<location>\d+(?:-\d+)?(?:,\s*\d+(?:-\d+)?)*))?$")
 
 
@@ -49,18 +53,45 @@ def line_numbers(location: str | None) -> set[int]:
     return {number for span in location_parts(location) for number in span}
 
 
+def extra_sites(spans: list[str]) -> list[str]:
+    """Locations of the `:N` / `:N-M` code spans that follow the primary path."""
+    matches = (EXTRA_SITE.fullmatch(span.strip()) for span in spans)
+    return [match.group("location") for match in matches if match]
+
+
+def primary_index(spans: list[str]) -> int:
+    """Index of the first `path:line` span; the first span when none carries a line."""
+    located = (
+        index
+        for index, span in enumerate(spans)
+        if (match := FILE_LOCATION.fullmatch(span.strip())) and match.group("location")
+    )
+    return next(located, 0)
+
+
+def file_and_location(file_line: str) -> tuple[str, str | None] | None:
+    """Split a File line into path and location, merging extra `:N` sites the reviewer appends."""
+    spans = CODE_SPAN.findall(file_line) or [file_line]
+    start = primary_index(spans)
+    primary = FILE_LOCATION.fullmatch(spans[start].strip())
+    if primary is None:
+        return None
+    parts = [primary.group("location"), *extra_sites(spans[start + 1 :])]
+    return primary.group("file"), ", ".join(filter(None, parts)) or None
+
+
 def parse_findings(markdown: str) -> list[Finding]:
     findings: list[Finding] = []
     for match in FINDING.finditer(markdown):
-        file_match = FILE_LOCATION.fullmatch(match.group("file").strip())
-        if file_match is None:
+        parsed = file_and_location(match.group("file"))
+        if parsed is None:
             continue
         findings.append(
             Finding(
                 rule=match.group("rule"),
                 severity=match.group("severity"),
-                file=file_match.group("file"),
-                location=file_match.group("location"),
+                file=parsed[0],
+                location=parsed[1],
             )
         )
     return findings
@@ -128,6 +159,9 @@ def prompt_for(fixture_path: Path, fixture: dict[str, object]) -> str:
         "Read skill/SKILL.md and follow it as the common-code-reviewer skill. "
         f"Load the Language Reference for {fixture['language']}. "
         f"Review only {source.relative_to(REPO_ROOT)} in --thorough mode. "
+        f"{source.parent.relative_to(REPO_ROOT)}/ is this harness's fixture directory, not part "
+        "of the reviewed project: decide whether the file is a test file from its own name and "
+        "content, as the Scoring Profile's naming rules describe, never from that directory. "
         f"{evidence}"
         "Use the skill's normal Markdown output interface, including the visible "
         "Rule field for every finding. Do not edit or execute any reviewed file."

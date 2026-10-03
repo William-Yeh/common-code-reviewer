@@ -3,6 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "PyYAML==6.0.2",
+#   "tree-sitter-language-pack==1.20.0",
 # ]
 # ///
 
@@ -37,6 +38,7 @@ from validate_structure import (
     profile_gaps,
     register_language,
     registry_languages,
+    syntax_problem,
     uncovered_rules,
 )
 
@@ -247,6 +249,40 @@ class ExpectationTests(unittest.TestCase):
                 "duplicate required expectation ('common/dead-code', '3')",
             ],
         )
+
+
+JAVA_TEST = b"""class InvoiceTest {
+    @Test
+    void total() {
+        assertThat(invoice.total()).isEqualTo(121);
+    }
+}
+"""
+
+
+class FixtureSyntaxTests(unittest.TestCase):
+    def test_well_formed_source_parses(self) -> None:
+        self.assertIsNone(syntax_problem(JAVA_TEST, "InvoiceTest.java", "java"))
+
+    def test_unresolved_symbols_are_not_syntax_errors(self) -> None:
+        # Fixtures are excerpts: undeclared types and imports must still pass.
+        self.assertIsNone(syntax_problem(b"class A { Missing m = new Missing(); }\n", "A.java", "java"))
+
+    def test_syntax_error_names_its_line(self) -> None:
+        broken = JAVA_TEST.replace(b"invoice.total())", b"invoice.total()")
+        self.assertEqual(
+            syntax_problem(broken, "InvoiceTest.java", "java"),
+            "source does not parse as java: syntax error at line 4",
+        )
+
+    def test_tsx_and_jsx_use_the_tsx_grammar(self) -> None:
+        component = b"export const Badge = () => <span className=\"badge\">ok</span>;\n"
+        self.assertIsNone(syntax_problem(component, "Badge.tsx", "typescript"))
+        self.assertIsNone(syntax_problem(component, "Badge.jsx", "typescript"))
+        self.assertIsNotNone(syntax_problem(b"const a = <span>;\n", "Badge.tsx", "typescript"))
+
+    def test_dockerfile_parses_with_its_own_grammar(self) -> None:
+        self.assertIsNone(syntax_problem(b"FROM alpine:3.20\nUSER 10001\n", "Dockerfile", "dockerfile"))
 
 
 class RepositoryTests(unittest.TestCase):

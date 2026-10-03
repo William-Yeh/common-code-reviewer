@@ -1,26 +1,18 @@
-// Test sample #1: Order handler — targets general SKILL.md principles + Rust rules
-// Focuses on: Security, Error handling (unwrap/panic), Performance, Async, FP, SRP
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-// [ISSUE: BLOCKER — SQL injection via format! string interpolation]
 pub async fn find_order(db: &Database, order_id: &str) -> Order {
     let query = format!("SELECT * FROM orders WHERE id = '{}'", order_id);
-    // [ISSUE: BLOCKER — .unwrap() in library code panics the caller on any DB error]
     let row = db.query_one(&query).await.unwrap();
     parse_order(row)
 }
 
-// [ISSUE: BLOCKER — SQL injection again; user-controlled status concatenated]
 pub async fn orders_by_status(db: &Database, status: &str) -> Vec<Order> {
     let query = format!("SELECT * FROM orders WHERE status = '{}'", status);
-    // [ISSUE: MAJOR — unbounded query, no LIMIT/pagination on a potentially huge table]
     let rows = db.query(&query).await.expect("query failed");
     rows.into_iter().map(parse_order).collect()
 }
 
-// [ISSUE: BLOCKER — command injection: unsanitized order_id passed to shell]
 pub fn export_invoice(order_id: &str) -> String {
     let output = std::process::Command::new("sh")
         .arg("-c")
@@ -30,13 +22,11 @@ pub fn export_invoice(order_id: &str) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-// [ISSUE: BLOCKER — path traversal: user-controlled file name in path]
 pub fn read_receipt(file_name: &str) -> Vec<u8> {
     let path = format!("/var/receipts/{}", file_name);
     std::fs::read(path).unwrap()
 }
 
-// [ISSUE: MAJOR — N+1 query pattern: one DB round-trip per item inside a loop]
 pub async fn enrich_orders(db: &Database, orders: &[Order]) -> Vec<EnrichedOrder> {
     let mut result = Vec::new();
     for order in orders {
@@ -45,14 +35,13 @@ pub async fn enrich_orders(db: &Database, orders: &[Order]) -> Vec<EnrichedOrder
             .await
             .unwrap();
         result.push(EnrichedOrder {
-            order: order.clone(), // [ISSUE: MINOR — clone per iteration of an owned Order]
+            order: order.clone(),
             customer: parse_customer(customer),
         });
     }
     result
 }
 
-// [ISSUE: MAJOR — Mutex held across .await; blocks the async executor / deadlock risk]
 pub async fn record_metric(state: Arc<Mutex<HashMap<String, u64>>>, key: &str, db: &Database) {
     let mut guard = state.lock().unwrap();
     *guard.entry(key.to_string()).or_insert(0) += 1;
@@ -60,29 +49,25 @@ pub async fn record_metric(state: Arc<Mutex<HashMap<String, u64>>>, key: &str, d
     db.flush_metrics().await.unwrap();
 }
 
-// [ISSUE: BLOCKER — blocking std::fs call inside async fn stalls the runtime worker]
 pub async fn load_template() -> String {
     std::fs::read_to_string("/etc/app/template.html").unwrap()
 }
 
-// [ISSUE: MAJOR — SRP: validates, charges payment, persists, AND emails in one function]
 pub async fn process_order(db: &Database, order: Order) -> bool {
     if order.total <= 0.0 {
-        return false; // [ISSUE: MINOR — bool return loses the reason for failure; use Result]
+        return false;
     }
-    let _ = charge_card(&order); // [ISSUE: MAJOR — Result silently discarded; payment failure ignored]
+    let _ = charge_card(&order);
     db.save(&order).await.unwrap();
     send_confirmation(&order.email);
     true
 }
 
-// [ISSUE: MINOR — sensitive data: full card number logged]
 fn charge_card(order: &Order) -> Result<(), String> {
     println!("Charging card {} for order {}", order.card_number, order.id);
     Ok(())
 }
 
-// [ISSUE: NIT — magic number 30 unexplained]
 pub fn is_stale(age_days: u64) -> bool {
     age_days > 30
 }
@@ -125,3 +110,29 @@ pub struct EnrichedOrder {
 }
 pub struct Customer;
 pub struct Row;
+
+pub struct OrderLine {
+    pub sku: String,
+    pub price: u64,
+}
+
+#[derive(Clone)]
+pub struct DiscountRule {
+    pub sku_prefix: String,
+    pub percent_off: u64,
+}
+
+/// Applies the active discount rules to every line of an order.
+pub fn apply_discounts(lines: &mut [OrderLine], rules: &Vec<DiscountRule>) {
+    for line in lines.iter_mut() {
+        let snapshot: Vec<DiscountRule> = rules.clone();
+        line.price = price_after(&snapshot, &line.sku, line.price);
+    }
+}
+
+fn price_after(rules: &[DiscountRule], sku: &str, price: u64) -> u64 {
+    rules
+        .iter()
+        .filter(|rule| sku.starts_with(&rule.sku_prefix))
+        .fold(price, |acc, rule| acc * (100 - rule.percent_off) / 100)
+}

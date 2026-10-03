@@ -1,6 +1,3 @@
-// Test sample: Spring Boot order controller with intentional issues
-// This file contains ~12 deliberate problems for the code review skill to catch.
-
 package com.example.orders;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,7 +6,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import javax.persistence.*;
 import java.util.*;
 
-// [ISSUE: Entity exposed directly as REST resource — no DTO separation]
 @Entity
 @Table(name = "orders")
 class Order {
@@ -18,7 +14,7 @@ class Order {
     private String customerId;
     private String product;
     private int quantity;
-    private double price; // [ISSUE: double for money — floating point precision]
+    private double price;
 
     // getters/setters omitted for brevity
     public Long getId() { return id; }
@@ -33,32 +29,26 @@ class Order {
     public void setPrice(double price) { this.price = price; }
 }
 
-// [ISSUE: God class — controller + service + repository combined]
 @RestController
 @RequestMapping("/orders")
 public class OrderController {
 
-    // [ISSUE: Field injection — should use constructor injection]
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private EntityManager entityManager;
 
-    // [ISSUE: Global mutable cache — not thread-safe]
-    private Map cache = new HashMap(); // [ISSUE: Raw type — no generics]
+    private Map cache = new HashMap();
 
     @GetMapping
-    public List getAllOrders() { // [ISSUE: Raw type List without generic parameter]
-        // [ISSUE: Unbounded query — no pagination]
+    public List getAllOrders() {
         return entityManager.createQuery("SELECT o FROM Order o").getResultList();
     }
 
     @PostMapping
     public Order createOrder(@RequestBody Order order) {
-        // [ISSUE: No @Valid, entity used as request body — no input validation]
 
-        // [ISSUE: SQL injection via string concatenation]
         jdbcTemplate.execute(
             "INSERT INTO orders (customer_id, product, quantity, price) VALUES ('"
             + order.getCustomerId() + "', '"
@@ -67,23 +57,20 @@ public class OrderController {
             + order.getPrice() + ")"
         );
 
-        // [ISSUE: No @Transactional — mixed read/write without transaction boundary]
         if (order.getQuantity() > 500) {
             try {
                 notifyWarehouse(order);
             } catch (Exception e) {
-                // [ISSUE: Catch Exception broadly, print stack trace]
                 e.printStackTrace();
             }
         }
 
         cache.put(order.getId(), order);
-        return order; // [ISSUE: Returning entity directly — exposes internal representation]
+        return order;
     }
 
     @GetMapping("/search")
     public List<Order> searchOrders(@RequestParam String customerId, @RequestParam String status) {
-        // [ISSUE: SQL injection via string concatenation]
         String query = "SELECT * FROM orders WHERE customer_id = '" + customerId
             + "' AND status = '" + status + "'";
         return jdbcTemplate.queryForList(query).stream()
@@ -93,18 +80,15 @@ public class OrderController {
                 o.setCustomerId((String) row.get("customer_id"));
                 return o;
             })
-            .collect(java.util.stream.Collectors.toList()); // [ISSUE: Could use .toList() on JDK 16+]
+            .collect(java.util.stream.Collectors.toList());
     }
 
     private void notifyWarehouse(Order order) throws Exception {
-        // [ISSUE: throws Exception — too broad]
         java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
             new java.net.URL("http://warehouse-service/notify").openConnection();
         conn.setRequestMethod("POST");
         conn.setDoOutput(true);
-        // [ISSUE: No timeout set, no resource cleanup with try-with-resources]
         conn.getOutputStream().write(order.toString().getBytes());
-        // [ISSUE: Response not checked]
         conn.getInputStream().read();
     }
 }

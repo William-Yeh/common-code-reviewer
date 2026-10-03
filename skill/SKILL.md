@@ -4,7 +4,7 @@ description: Use when the user asks to review code, audit changes, or review a P
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Code Review
@@ -90,7 +90,8 @@ uncataloged guidance.
 | `common/sensitive-data-exposure` | MINOR | Sensitive data is exposed through output, errors, or logs. |
 | `common/insecure-default` | MAJOR | Default configuration creates material security or reliability risk. |
 | `common/unsafe-deserialization` | BLOCKER | Untrusted data is deserialized through an unsafe mechanism. |
-| `common/n-plus-one-query` | MAJOR | A loop performs one query per item where batching is possible. |
+| `common/n-plus-one-query` | MAJOR | A loop performs one query per item where batching is possible, outside a request-handling path. |
+| `common/n-plus-one-hot-path` | BLOCKER | A loop performs one query per item where batching is possible, inside an HTTP handler, route function, or RPC method. |
 | `common/unbounded-query` | MAJOR | A potentially large query has no limit or pagination. |
 | `common/hot-path-allocation` | MINOR | A hot path performs avoidable allocation or copying. |
 | `common/blocking-in-async` | BLOCKER | Blocking work runs on an asynchronous execution thread. |
@@ -121,6 +122,7 @@ uncataloged guidance.
 | `common/nondeterministic-dependency` | MAJOR | Time, randomness, or global state is used without control. |
 | `common/complex-construction` | MAJOR | Construction performs work or requires excessive setup. |
 | `common/private-logic` | MINOR | Significant behavior is hidden behind an untestable private surface. |
+| `common/assertion-free-test` | MAJOR | A test exercises code but asserts nothing about its result, so it passes whatever the code does. |
 | `common/ignored-error` | BLOCKER | A failure is discarded and execution continues unsafely. |
 | `common/incomplete-error-handling` | MINOR | A recoverable failure is insufficiently checked, wrapped, or reported. |
 | `common/resource-leak` | BLOCKER | A resource is not released on all paths. |
@@ -130,6 +132,7 @@ uncataloged guidance.
 | `common/graceful-shutdown` | NIT | Long-running work lacks an orderly shutdown path. |
 | `common/style-naming` | NIT | Naming conflicts with the language or repository convention. |
 | `common/style-readability` | NIT | A non-functional readability issue is not covered by automated formatting. |
+| `common/deprecated-api` | MAJOR | Code or configuration uses an API or option that the project's own toolchain or framework version deprecates or has removed. |
 | `common/language-idiom` | NIT | Code ignores a clearly safer or simpler current language idiom. |
 
 ## Review Categories
@@ -159,7 +162,7 @@ Look for:
 ### Performance
 
 Look for:
-- N+1 query patterns — queries inside loops
+- N+1 query patterns — queries inside loops; on a request-handling path they block merge
 - Unbounded queries — missing LIMIT/pagination on potentially large result sets
 - Unnecessary allocations in hot paths or tight loops
 - Blocking calls in async contexts
@@ -187,7 +190,7 @@ Look for:
 
 **Clean Code** — look for:
 - Names that don't reveal intent — single-letter variables, abbreviations, misleading names
-- Functions exceeding ~20 lines or mixing abstraction levels
+- Functions mixing abstraction levels
 - Magic numbers and strings — unexplained literals
 - Dead code, commented-out code, unreachable branches
 - Deep nesting (3+ levels) — the arrow anti-pattern
@@ -282,7 +285,9 @@ Report each finding in this format, ordered by severity (BLOCKER first):
 ```
 
 For an absence finding, such as a missing Dockerfile instruction, cite the file
-without a fabricated line number.
+without a fabricated line number. When one finding covers the same issue at
+several sites in a file, list them in the one location:
+`path/to/file.ext:12, 30-32`.
 
 ### Part 2: Risk Report
 

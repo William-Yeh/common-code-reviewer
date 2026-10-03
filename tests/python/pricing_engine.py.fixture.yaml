@@ -3,6 +3,9 @@ language: python
 source: "pricing_engine.py"
 coverage: "lcov.info"
 required:
+  - rule: common/unnecessary-mutation
+    location: "69-82"
+    rationale: "apply_promotions rewrites the caller's Quote (a non-frozen dataclass, unlike Customer and LineItem) field by field and then returns it; building a new Quote with dataclasses.replace keeps the input intact."
   - rule: common/critical-change-risk
     location: "42-66"
     rationale: "quote_price has CC 10 (for, two ifs with an and, an if with an or, an if, an except, a ternary) and lcov.info shows 5 of 19 executable lines covered (26%): CRAP = 100 × 0.74³ + 10 ≈ 50, above 30."

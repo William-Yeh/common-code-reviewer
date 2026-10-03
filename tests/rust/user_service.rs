@@ -1,5 +1,3 @@
-// Test sample #2: User service — targets general SKILL.md principles + Rust idioms
-// Focuses on: OCP, ISP, DIP, Architecture, FP, Testability, Clean Code,
 //             plus Rust-specific: unsafe/SAFETY, Box<dyn Error> in lib API,
 //             Arc<Mutex> overuse, clone-to-compile, newtype/enum design.
 
@@ -9,7 +7,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ─── ISP: Fat trait ─────────────────────────────────────────────────
-// [ISSUE: ISP — 8 methods; a read-only consumer must implement all of them]
 pub trait UserStore {
     fn find_by_id(&self, id: &str) -> Option<User>;
     fn find_by_email(&self, email: &str) -> Option<User>;
@@ -22,8 +19,6 @@ pub trait UserStore {
 }
 
 // ─── OCP: match on action string ────────────────────────────────────
-// [ISSUE: OCP — stringly-typed; every new action edits this function]
-// [ISSUE: Rust — `action: &str` should be an enum so the match is exhaustive]
 pub fn handle_user_action(action: &str, user_id: &str) -> Result<(), Box<dyn Error>> {
     match action {
         "activate" => {
@@ -42,49 +37,42 @@ pub fn handle_user_action(action: &str, user_id: &str) -> Result<(), Box<dyn Err
             println!("Promoting {}", user_id);
             Ok(())
         }
-        // [ISSUE: unknown actions silently succeed]
         _ => Ok(()),
     }
 }
 
 // ─── Architecture: anemic domain + stringly-typed fields ────────────
-// [ISSUE: Anemic domain — pure data bag, all behavior lives elsewhere]
 #[derive(Clone)]
 pub struct User {
     pub id: String,
     pub name: String,
     pub email: String,
-    pub role: String,   // [ISSUE: Rust — should be a Role enum, not String]
-    pub status: String, // [ISSUE: Rust — should be a Status enum, not String]
+    pub role: String,
+    pub status: String,
     pub last_login: u64,
 }
 
 // ─── FP: hidden side effects + non-determinism ──────────────────────
-// [ISSUE: FP — named "count" but writes a file (hidden side effect)]
-// [ISSUE: Testability — SystemTime::now() makes this non-deterministic]
 pub fn count_active_users(users: &[User]) -> usize {
     let count = users.iter().filter(|u| u.status == "active").count();
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
     let line = format!("{}: {}\n", now, count);
-    std::fs::write("/tmp/user-stats.txt", line).unwrap(); // [ISSUE: side effect + unwrap]
+    std::fs::write("/tmp/user-stats.txt", line).unwrap();
     count
 }
 
 // ─── Testability: hard-coded dependencies ───────────────────────────
 pub struct UserService {
-    // [ISSUE: no injected dependencies — uses hardcoded paths/globals]
-    cache: Arc<Mutex<HashMap<String, User>>>, // [ISSUE: Rust — Arc<Mutex> where single ownership would do]
+    cache: Arc<Mutex<HashMap<String, User>>>,
 }
 
 impl UserService {
-    // [ISSUE: Testability — hardcoded filesystem path, untestable]
     pub fn load_config(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let data = std::fs::read_to_string("/etc/app/users.json")?;
         let config = parse_kv(&data);
         Ok(config)
     }
 
-    // [ISSUE: Rust — clone-to-compile: clones the whole User just to insert]
     pub fn cache_user(&self, user: &User) {
         let mut guard = self.cache.lock().unwrap();
         guard.insert(user.id.clone(), user.clone());
@@ -111,29 +99,25 @@ impl UserService {
 }
 
 // ─── Rust: unsafe without SAFETY justification ──────────────────────
-// [ISSUE: unsafe block with no // SAFETY: comment; and a safe alternative exists]
 pub fn first_byte(data: &[u8]) -> u8 {
     unsafe { *data.get_unchecked(0) }
 }
 
-// [ISSUE: Clean Code — bad naming: what are `d`, `f`, `r`, `x`?]
 fn proc(d: &[User], f: &str) -> Vec<User> {
     let mut r = Vec::new();
     for x in d {
         if x.role == f {
-            r.push(x.clone()); // [ISSUE: clone in loop]
+            r.push(x.clone());
         }
     }
     r
 }
 
-// [ISSUE: Dead code — never called]
 fn old_notify(email: &str, msg: &str) {
     println!("Sending to {}: {}", email, msg);
 }
 
 // ─── DIP: depends on concrete type, not abstraction ─────────────────
-// [ISSUE: DIP — takes a concrete PostgresStore instead of `&mut impl UserStore`]
 pub fn remove_user(store: &mut PostgresStore, id: &str) -> Result<(), Box<dyn Error>> {
     store.delete(id)
 }
