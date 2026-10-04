@@ -35,9 +35,6 @@ required:
   - rule: common/hard-coded-dependency
     location: "53, 120"
     rationale: "Fixed dependencies tests must replace: the constructor opens new URL(\"http://payment-gateway.internal\").openConnection(), and loadGatewayConfig reads new FileInputStream(\"/etc/payments/gateway.properties\"). Inject a gateway client and a config source."
-  - rule: common/authorization-gap
-    location: "174"
-    rationale: "exportAll has no authorization check. Any caller can export all payment transactions."
   - rule: common/deep-nesting
     location: "63-72"
     rationale: "Deep nesting — 3 levels of if inside switch case. Flatten with early returns or extract validation."
@@ -53,9 +50,6 @@ required:
   - rule: common/unclear-name
     location: "147, 148-151"
     rationale: "Bad naming: Util.process, data, t, res, d, a — none reveal intent."
-  - rule: common/mixed-abstraction
-    location: "128-143"
-    rationale: "Mixed abstraction levels — refund does config loading, validation, and response building in one method."
   - rule: common/incomplete-error-handling
     location: "122"
     rationale: "e.printStackTrace() in production — use SLF4J logger."

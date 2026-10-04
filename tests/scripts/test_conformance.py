@@ -3,12 +3,25 @@
 # requires-python = ">=3.12"
 # dependencies = [
 #   "PyYAML==6.0.2",
+#   "hypothesis==6.140.2",
 # ]
 # ///
 
 """Tests for semantic Conformance Finding matching."""
 
+import contextlib
+import io
+import json
+import os
+import stat
+import sys
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
+
+from hypothesis import given
+from hypothesis import strategies as st
 
 from run_conformance import (
     REPO_ROOT,
@@ -20,6 +33,10 @@ from run_conformance import (
     prompt_for,
     score_report,
     score_result,
+    Summary,
+    format_summary,
+    main,
+    verdict,
     summarize_runs,
 )
 
@@ -242,6 +259,139 @@ class ScoreResultTests(unittest.TestCase):
             [{"rule": "common/ignored-error", "severity": "MINOR", "file": "tests/go/svc.go", "location": "10"}],
         )
         self.assertEqual((result["cost_usd"], result["markdown"]), (0.07, drifted))
+
+
+def clean_result(passed: bool) -> dict[str, object]:
+    return {"passed": passed, "missing": [] if passed else [{}], "forbidden": [], "interface_errors": []}
+
+
+RESULTS = st.lists(st.booleans().map(clean_result), min_size=1, max_size=20)
+RECALL = st.integers(min_value=1, max_value=700).flatmap(
+    lambda total: st.tuples(st.integers(min_value=0, max_value=total), st.just(total))
+)
+THRESHOLD = st.floats(min_value=0.0, max_value=1.0)
+
+
+class VerdictProperties(unittest.TestCase):
+    @given(RESULTS, RECALL)
+    def test_without_a_threshold_every_fixture_must_pass(self, results, recall) -> None:
+        self.assertEqual(verdict(results, recall, None), all(r["passed"] for r in results))
+
+    @given(RESULTS, RECALL, THRESHOLD)
+    def test_with_a_threshold_clean_runs_pass_exactly_when_recall_reaches_it(self, results, recall, threshold) -> None:
+        found, total = recall
+        self.assertEqual(verdict(results, recall, threshold), found / total >= threshold)
+
+    @given(RESULTS, RECALL, THRESHOLD, st.sampled_from(["runtime_error", "forbidden", "interface_errors"]))
+    def test_a_runtime_error_forbidden_finding_or_drift_always_fails(self, results, recall, threshold, defect) -> None:
+        broken = {"runtime_error": "Not logged in", "passed": False} if defect == "runtime_error" else {
+            **clean_result(True), defect: [{"rule": "common/x"}], "passed": False}
+        self.assertFalse(verdict([*results, broken], recall, threshold))
+        self.assertFalse(verdict([*results, broken], recall, None))
+
+    @given(RESULTS, THRESHOLD)
+    def test_a_run_with_no_scored_expectations_never_passes_a_threshold(self, results, threshold) -> None:
+        self.assertFalse(verdict(results, (0, 0), threshold))
+
+
+RULE_IDS = st.sampled_from([f"common/rule-{n}" for n in range(8)])
+KEYS = st.tuples(st.just("tests/go/svc.go.fixture.yaml"), st.integers(0, 30), RULE_IDS)
+SUMMARIES = st.builds(
+    Summary,
+    recall=RECALL,
+    per_rule=st.dictionaries(
+        RULE_IDS, st.integers(1, 9).flatmap(lambda t: st.tuples(st.integers(0, t), st.just(t)))
+    ),
+    systematic=st.lists(KEYS, max_size=5),
+    flaky=st.lists(KEYS, max_size=5),
+)
+
+
+class FormatSummaryProperties(unittest.TestCase):
+    @given(SUMMARIES, st.integers(1, 9))
+    def test_header_states_recall_and_run_count(self, summary, runs) -> None:
+        found, total = summary.recall
+        header = format_summary(summary, runs).split("\n")[0]
+        self.assertTrue(header.startswith(f"recall {found}/{total} ("))
+        self.assertTrue(header.endswith(f"over {runs} run(s)"))
+
+    @given(SUMMARIES)
+    def test_exactly_the_rules_found_less_than_fully_are_listed(self, summary) -> None:
+        lines = format_summary(summary, 1).split("\n")
+        listed = {line.split()[0] for line in lines if line.startswith("common/")}
+        self.assertEqual(listed, {rule for rule, (f, t) in summary.per_rule.items() if f < t})
+
+    @given(SUMMARIES)
+    def test_section_counts_match_their_lists(self, summary) -> None:
+        text = format_summary(summary, 1)
+        self.assertIn(f"systematic misses (never found): {len(summary.systematic)}", text)
+        self.assertIn(f"flaky expectations (found in some runs): {len(summary.flaky)}", text)
+        self.assertEqual(sum(line.startswith("  tests/") for line in text.split("\n")),
+                         len(summary.systematic) + len(summary.flaky))
+
+
+FAKE_CLAUDE = """#!/usr/bin/env python3
+import json, os, sys
+if "--version" in sys.argv:
+    print("fake-claude 1.0")
+    sys.exit(0)
+if os.environ.get("FAKE_CLAUDE_FAIL"):
+    print("Not logged in", file=sys.stderr)
+    sys.exit(1)
+markdown = open(os.environ["FAKE_CLAUDE_MARKDOWN"]).read()
+print(json.dumps({"result": markdown, "total_cost_usd": 0.01, "modelUsage": {"fake-model": {}}}))
+"""
+
+
+class MainEndToEnd(unittest.TestCase):
+    """Runs main() in-process against a fake claude executable on PATH."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        fake = self.tmp / "claude"
+        fake.write_text(FAKE_CLAUDE.replace("#!/usr/bin/env python3", f"#!{sys.executable}"))
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+        fixture = REPO_ROOT / "tests/go/edge_proxy.go.fixture.yaml"
+        import yaml
+        required = yaml.safe_load(fixture.read_text())["required"]
+        severities = load_severities()
+        self.markdown = self.tmp / "review.md"
+        self.markdown.write_text("".join(
+            f"### [{severities[e['rule']]}] finding\n**File:** `tests/go/edge_proxy.go:{e['location']}`\n"
+            f"**Rule:** `{e['rule']}`\n\n" for e in required))
+        self.report = self.tmp / "report.json"
+        self.env = {"PATH": f"{self.tmp}{os.pathsep}{os.environ['PATH']}",
+                    "FAKE_CLAUDE_MARKDOWN": str(self.markdown)}
+
+    def run_main(self, *argv: str, **env: str) -> tuple[int, str]:
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {**self.env, **env}), mock.patch.object(
+            sys, "argv", ["run_conformance.py", *argv]
+        ), contextlib.redirect_stdout(out):
+            try:
+                main()
+                code = 0
+            except SystemExit as exit_:
+                code = int(exit_.code or 0)
+        return code, out.getvalue()
+
+    def test_live_run_that_finds_everything_passes_and_records_recall(self) -> None:
+        code, out = self.run_main("--fixture", "edge_proxy", "--report", str(self.report), "--min-recall", "1.0")
+        report = json.loads(self.report.read_text())
+        self.assertEqual(code, 0)
+        self.assertEqual((report["recall"], report["runtime_version"], report["passed"]), ([3, 3], "fake-claude 1.0", True))
+        self.assertIn("recall 3/3 (100.0%) over 1 run(s)", out)
+
+    def test_cli_failure_is_recorded_as_a_runtime_error_and_fails_the_run(self) -> None:
+        code, _ = self.run_main("--fixture", "edge_proxy", "--report", str(self.report), "--min-recall", "0.5",
+                                FAKE_CLAUDE_FAIL="1")
+        result = json.loads(self.report.read_text())["fixtures"][0]
+        self.assertEqual((code, result["runtime_error"]), (1, "Not logged in"))
+
+    def test_summarize_reads_saved_reports_without_calling_the_cli(self) -> None:
+        self.run_main("--fixture", "edge_proxy", "--report", str(self.report))
+        code, out = self.run_main("--summarize", str(self.report), FAKE_CLAUDE_FAIL="1")
+        self.assertEqual((code, out.splitlines()[0]), (0, "recall 3/3 (100.0%) over 1 run(s)"))
 
 
 if __name__ == "__main__":

@@ -62,10 +62,9 @@ uvx lizard path/to/file.py        # or pipx run lizard
 ```
 
 Each scored language reference ends with a Scoring Profile. It lists which
-declarations get scored, which constructs count as decision points, how test
-files are recognised, which coverage tool and report format to expect, and
-where lizard or the team's usual quality gate counts differently from the
-skill.
+declarations get scored and which constructs count as decision points. It also
+says how test files are recognised and which coverage report to expect. The
+last slot records where lizard or the team's usual gate counts differently.
 
 ## Supported Languages
 
@@ -111,7 +110,7 @@ Compatible with any AI agent that supports the [Agent Skills spec](https://agent
 - `Review PR #42`
 - `Review this code but skip the nitpicks`
 - `Do a thorough review of src/auth.ts`
-- `Check only the security and performance issues`
+- `Review only the files under src/payments`
 
 ### CLI
 
@@ -130,6 +129,26 @@ Compatible with any AI agent that supports the [Agent Skills spec](https://agent
 | `--relaxed` | Skip NITs, only flag repeated MINOR patterns. |
 | `--no-fixes` | Report issues only, no suggested code. |
 | `--files <paths>` | Review specific files instead of auto-detecting diff. |
+
+### Choosing a model
+
+The skill runs on whatever model your agent session uses; it does not pick
+one. Measured on this repository's conformance fixtures:
+
+| Model | Expected findings found | Cost of one 25-fixture run |
+|---|---|---|
+| Sonnet 5.5 | 94.5% (six runs) | about $2 |
+| Opus 5.5 | 96.7% (three runs) | about $6 |
+| Fable 5.1 | 97.2% (three runs) | about $33 |
+
+Use Sonnet for routine diffs. Switch to Opus for architecture-heavy changes,
+large refactors, or a final review before a release; it is better at
+whole-unit judgments such as god modules. Fable's lead over Opus is within
+run-to-run noise on these fixtures, at about five times the cost.
+
+In Claude Code, run `/model opus` in the session, or start it with
+`claude --model opus`. Other agents have their own model setting.
+ADR-0009 records why the skill does not pin a model.
 
 ## Project Structure
 
@@ -164,15 +183,16 @@ To add a new language:
 
 1. Write `skill/references/<language>.md`, using the existing language
    references as a model. If the language should get Change Risk scores, end
-   the file with a `## Change Risk` section that fills in the five Scoring
-   Profile slots: Scored Units, Decision Points, Test Files, Coverage Evidence,
-   and Oracle Deviations. The Decision Points slot needs one row for each
-   category in the shared decision-point table in `SKILL.md`.
-   Every instruction that can produce a finding names the rule it resolves
-   to, such as `` — `common/ignored-error` ``, and never states a severity of
+   the file with a `## Change Risk` section. It fills five Scoring Profile
+   slots: Scored Units, Decision Points, Test Files, Coverage Evidence, and
+   Oracle Deviations. The Decision Points slot needs one row for each category
+   in the shared decision-point table in `SKILL.md`.
+
+   Every instruction that can produce a finding names the rule it resolves to,
+   such as `` — `common/ignored-error` ``, and never states a severity of
    its own (ADR-0006). If the language has behavior no shared rule covers,
-   add a `## Language-Owned Review Rules` table with `<language>/<rule>` IDs,
-   as `go.md`, `rust.md`, and `dockerfile.md` do.
+   add a `## Language-Owned Review Rules` table with `<language>/<rule>`
+   IDs, as `go.md`, `rust.md`, and `dockerfile.md` do.
 2. Add the language to `skill/languages.yaml`. Set `scored` to `true` or
    `false`, and list the language's `comment_prefixes`. The generated Language
    Detection table picks up the `scored` flag so the reviewer can see it.
@@ -195,6 +215,44 @@ Three checks apply. Every review rule must appear in the `required` list of at
 least one fixture, every fixture source must parse, and every scored language
 must have a complete Scoring Profile.
 
+An existing expectation changes in one of four ways (ADR-0008). Widen it to
+another genuine site of the same issue, or remap it to a rule that plainly
+fits the code better. Drop it if the code does not show the issue, or keep it
+as a real miss. A rule
+the reviewer keeps missing where it does fit is a skill problem: fix it in the
+skill, never in the expectation.
+
+### Refreshing the language references
+
+The references mix lasting principles with version-specific claims, such as
+"since Go 1.26" or "removed in Boot 4.0". Re-check the version-specific claims
+when a language or major framework ships a release, and at least twice a year:
+
+1. Verify each claim against the primary source: release notes, JEP or PEP
+   pages, `go.dev/doc`, the TC39 finished-proposals list, framework
+   changelogs. For long changelogs, fetch the raw file and search it rather
+   than relying on a summary.
+2. Recommend only final features. List previews, incubators, and experiments
+   as things to watch.
+3. State which version each piece of advice needs, judged against the
+   project's own declared version. Map APIs the project's toolchain deprecates
+   or removes to `common/deprecated-api`.
+4. Give every new instruction its rule ID and no severity of its own
+   (ADR-0006). If no rule fits, add one with a fixture.
+5. Before releasing, run three live conformance runs and compare recall with
+   the last set (ADR-0008).
+
+Open items from the 2026-10 refresh:
+
+- Python 3.15.0 final: confirm the release and its What's New.
+- TypeScript 7.1: its compiler API would remove the `@typescript/typescript6`
+  advice.
+- Next.js removing `middleware.ts`, and Node.js 26 becoming LTS.
+- Java preview features going final: primitive patterns, structured
+  concurrency, lazy constants.
+- Go `encoding/json/v2`, and Rust's never-type fallback lint, which was taken
+  from release notes without a second check.
+
 ## Tests
 
 The scripts under `tests/scripts/` declare their dependencies inline with PEP
@@ -204,16 +262,17 @@ it afterwards.
 
 ### Deterministic conformance
 
-These four scripts run in CI and produce the same result every time. They
-check that the language registry, the generated tables, and the review rule
-catalog agree with each other, that the detection patterns are well-formed, and
-that the derived coverage figures are correct. They also check each fixture:
-every location must point at a line of code rather than a blank or comment
-line, and when a fixture declares a coverage report, that report must actually
-cover the fixture's source file. Every fixture source must also parse cleanly
-with its tree-sitter grammar. Fixtures are excerpts, so references to types and
-packages outside the file are fine; a syntax error is not, because it shifts
-what the reviewer reads away from the fixture's line numbers.
+These four scripts run in CI and produce the same result every time. They check
+that the language registry, the generated tables, and the review rule catalog
+agree with each other, that the detection patterns are well-formed, and that
+the derived coverage figures are correct.
+
+They also check each fixture. Every location must point at a line of code, not
+a blank or comment line. When a fixture declares a coverage report, that report
+must cover the fixture's source file. Every fixture source must also parse
+cleanly with its tree-sitter grammar. Fixtures are excerpts, so references to
+types and packages outside the file are fine; a syntax error is not, because it
+shifts what the reviewer reads away from the fixture's line numbers.
 
 ```bash
 uv run tests/scripts/validate_structure.py
@@ -243,44 +302,116 @@ repository, it lets the scripts be scored on real coverage instead of the worst
 case. Regenerate it after changing a script or its tests:
 
 ```bash
-uv run --with coverage --with pyyaml --with tree-sitter-language-pack==1.20.0 -- coverage run \
+uv run --with coverage --with pyyaml --with tree-sitter-language-pack==1.20.0 --with hypothesis==6.140.2 -- coverage run \
   --include='tests/scripts/validate_structure.py,tests/scripts/run_conformance.py,tests/scripts/sync_generated.py' \
   -m unittest discover -s tests/scripts -p 'test_*.py'
 uv run --with coverage -- coverage lcov -o tests/scripts/lcov.info && rm .coverage
 ```
 
 <!-- BEGIN GENERATED COVERAGE -->
-The Conformance Fixtures cover **88/88 Review Rules (100%)**. See
+The Conformance Fixtures cover **92/92 Review Rules (100%)**. See
 `tests/COVERAGE.md` for the derived evidence.
 <!-- END GENERATED COVERAGE -->
 
 ### Live conformance
 
 This run invokes Claude Code, in read-only mode, against every fixture and
-matches the findings it produces against the rules the fixture expects. It is
-not part of the default CI job. It needs Anthropic credentials, and because
-model output is probabilistic the results are not exactly repeatable, so it
-runs by hand or on a schedule:
-
-```bash
-uv run tests/scripts/run_conformance.py --model sonnet --report conformance-runs/run-1.json
-```
+matches the findings it produces against the rules the fixture expects. Model
+output is probabilistic, so results differ from run to run. One run with
+sonnet costs about $2 and takes about 15 minutes.
 
 The run uses `claude --print --bare`, which reads credentials only from
-`ANTHROPIC_API_KEY`. Try one fixture first (`--fixture edge_proxy`).
-
-Fixture pass/fail is a blunt measure: one miss fails a fixture that has twenty
-expectations. Judge a change by recall instead, across several runs, because a
-single run cannot tell a flaky miss from a systematic one. `--summarize`
-re-scores saved reports with the current parser and fixtures, without calling
-the model, and prints overall recall, recall per rule, and which expectations
-were never found versus found only sometimes:
+`ANTHROPIC_API_KEY`. Try one fixture first:
 
 ```bash
+uv run tests/scripts/run_conformance.py --model sonnet --fixture edge_proxy --report conformance-runs/smoke.json
+```
+
+By default the runner exits 1 whenever any expectation is missed, and because
+recall stays below 100% a full run normally does. Pass `--min-recall 0.89` to
+exit 1 only on a runtime error, a forbidden finding, severity drift, or recall
+below 89%. That threshold sits two points under the lowest single run of the
+current skill and above every run of the v1.5.0 skill.
+
+To measure a change to the skill, make three full runs, then summarize them:
+
+```bash
+for i in 1 2 3; do
+  uv run tests/scripts/run_conformance.py --model sonnet --report conformance-runs/run-$i.json &
+done; wait
 uv run tests/scripts/run_conformance.py --summarize conformance-runs/run-*.json
 ```
 
+`--summarize` re-scores saved reports with the current parser and fixtures,
+without calling the model. It prints overall recall, recall per rule, and which
+expectations were never found versus found only in some runs. ADR-0008 sets the
+method: judge recall over three-run sets, not by how many fixtures pass. A
+difference under about 1% between sets is noise, and an expectation is a
+systematic miss only after six runs without a hit.
+
+To compare models, run a three-run set per model with `--model sonnet`,
+`--model opus`, or `--model fable`, and summarize each set separately. Longer
+reviews need a higher cap: `--max-budget-usd 1.00` for Opus and `4.00` for
+Fable. The figures under Choosing a model were produced this way.
+
+CI runs one live pass every Monday at 03:17 UTC, and on demand through
+**Run workflow** with `run_conformance` checked. It needs the repository secret
+`ANTHROPIC_API_KEY`; without it the job stops at "Require Anthropic
+credentials". The report is uploaded as the `claude-code-conformance`
+artifact. The job passes `--min-recall 0.89`, so it fails on a regression
+rather than on every run. A single run is a trend check, not a verdict on a
+change.
+
 ## Changelog
+
+### v1.7.0 (2026-10-04)
+
+- Every finding-producing instruction in the six references now names its
+  rule (up from 53 of 224 bullets), and no reference states a severity of its
+  own, completing ADR-0006
+- Added four rules for guidance no existing rule could carry, each with a
+  focused fixture that sonnet found in 3 of 3 runs:
+  `common/brittle-test` (MAJOR), `common/api-misuse` (MAJOR),
+  `common/speculative-abstraction` (MINOR), and `common/busy-wait` (MAJOR)
+- Python no longer advises "keep models thin", which contradicted
+  `common/anemic-domain`. Swallow-and-return-default now resolves to
+  `common/ignored-error` when data integrity is at stake and to
+  `common/erased-failure` otherwise
+- Removed guidance that no rule could carry and no diff could show:
+  `.proto` design, whole-function mutex scope, GraalVM reflection, Quarkus
+  health checks, and two test-coverage hints
+- The `notification-service.ts` layer-violation expectation now accepts the
+  call sites where the reviewer reports it, not only the imports
+- Documented how to refresh the language references, with the open items
+  from this refresh, under Extending
+- Recorded the model recommendation as ADR-0009: no model pin, Sonnet by
+  default and in CI, Opus for architecture-heavy reviews
+- Recorded how conformance is judged as ADR-0008: recall over repeated runs,
+  and the four ways a fixture expectation may change
+- Recall on three runs of the pre-existing fixtures: 600/642 (93.5%) with
+  the fixture fix, against 583/630 (92.5%) before. The rule-ID sweep alone did
+  not move it: 583 to 585 is within run-to-run noise. Most newly tagged
+  instructions govern patterns that no fixture exercises
+- Compared models on the same fixtures. Opus 5.5 found 95.3% of required
+  findings over three runs and Sonnet 5.5 found 93.0% over six (before the
+  audit below), at about 2.9
+  times the cost per run. Every Opus run scored above every Sonnet run
+- Audited the five expectations both models missed in all nine runs. Three
+  described issues the code does not show and were dropped: an authorization
+  check on a class with no entry point, "mixed abstraction" in a short
+  single-level method, and a god function that only delegates. One was
+  remapped: a controller holding TypeORM's `DataSource` is
+  `common/layer-violation`. The fifth was a gap in the skill: `python.md` had
+  no `print()` guidance, unlike TypeScript's `console.log` bullet. With the
+  bullet added, sonnet found it in 3 of 3 runs
+- On the corrected expectations, recall is 94.5% for Sonnet (six runs) and
+  96.7% for Opus (three runs), and Sonnet has two expectations it never found
+- Fable 5.1 found 97.2% over three runs at about $33 per run. That is within
+  noise of Opus, which costs about $6. Fable did report a real bug in the
+  `queue_drain.go` fixture that neither other model had: a closed queue made
+  `Drain` spin. The fixture now handles the closed channel, so it shows only
+  the busy-wait it was written for
+- Rule coverage: **92/92 rules (100%)**: 63 common, 1 Go, 12 Rust, 16 Dockerfile
 
 ### v1.6.0 (2026-10-03)
 

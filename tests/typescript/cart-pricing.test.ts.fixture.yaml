@@ -1,0 +1,11 @@
+version: 1
+language: typescript
+source: "cart-pricing.test.ts"
+required:
+  - rule: common/brittle-test
+    location: "5-11"
+    rationale: "The bulk-discount test spies on the private roundToCents and reads the private lastDiscountRate instead of asserting the total. It fails if rounding is inlined, and passes even when the discounted total is wrong."
+forbidden:
+  - rule: common/brittle-test
+    location: "13-16"
+    rationale: "This test asserts only the public result of total(); it survives any internal refactor."

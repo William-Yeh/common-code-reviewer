@@ -1,0 +1,8 @@
+version: 1
+language: java
+source: "ReportExporters.java"
+required:
+  - rule: common/speculative-abstraction
+    location: "11-15, 26-30"
+    rationale: "There is one exporter, yet it sits under an abstract base whose only content is a constant separator, and a factory that ignores its format argument and always returns CsvReportExporter. Both layers exist for variants nobody has written."
+forbidden: []

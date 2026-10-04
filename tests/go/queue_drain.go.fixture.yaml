@@ -1,0 +1,11 @@
+version: 1
+language: go
+source: "queue_drain.go"
+required:
+  - rule: common/busy-wait
+    location: "6-17"
+    rationale: "The empty default case makes select return at once when the queue is empty, so the loop spins on a full core between messages. Drop the default and let select block on queue and done."
+forbidden:
+  - rule: common/unmanaged-concurrency
+    location: "5-18"
+    rationale: "Drain has a termination path: it returns when done or queue is closed. Its defect is CPU burn, not missing lifecycle."

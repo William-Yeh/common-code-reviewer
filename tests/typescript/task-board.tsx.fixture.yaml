@@ -1,0 +1,8 @@
+version: 1
+language: typescript
+source: "task-board.tsx"
+required:
+  - rule: common/api-misuse
+    location: "15"
+    rationale: "The list reorders when Reverse is clicked, but each row is keyed by its array index. React matches rows by key, so after a reverse the uncontrolled inputs keep their old state and show edits under the wrong task. Key by task.id."
+forbidden: []

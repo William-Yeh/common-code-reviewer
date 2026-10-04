@@ -13,14 +13,14 @@ These rules supplement the common review framework. Apply them to `.go` files.
 Follow **Effective Go** and **Go Code Review Comments** (the official standards). Additionally:
 
 - Run `gofmt` / `goimports` — formatting is non-negotiable in Go. Do not flag any formatting issue that these tools handle.
-- Naming: short, concise names. `i` not `index` for loop vars. `ctx` not `context`. `err` not `error`. Exported names are the API — make them clear.
-- Package names: lowercase, single word, no underscores. The package name is part of the call site (`http.Get`, not `httpPackage.Get`).
-- No stutter: `http.HTTPServer` → `http.Server`. Package-qualified names should read naturally.
-- Acronyms: `ID`, `URL`, `HTTP` in all caps when exported. `id`, `url`, `http` in lower when unexported.
-- Getters: no `Get` prefix. `user.Name()` not `user.GetName()`. Setters use `Set` prefix: `user.SetName()`.
-- Interface names: single-method interfaces use `-er` suffix: `Reader`, `Writer`, `Closer`, `Stringer`.
-- Comment every exported name. Comments start with the name: `// Server represents an HTTP server.`
-- No `init()` unless absolutely necessary — it hides side effects and makes testing harder.
+- Naming: short, concise names. `i` not `index` for loop vars. `ctx` not `context`. `err` not `error`. Exported names are the API — make them clear — `common/style-naming`.
+- Package names: lowercase, single word, no underscores. The package name is part of the call site (`http.Get`, not `httpPackage.Get`) — `common/style-naming`.
+- No stutter: `http.HTTPServer` → `http.Server`. Package-qualified names should read naturally — `common/style-naming`.
+- Acronyms: `ID`, `URL`, `HTTP` in all caps when exported. `id`, `url`, `http` in lower when unexported — `common/style-naming`.
+- Getters: no `Get` prefix. `user.Name()` not `user.GetName()`. Setters use `Set` prefix: `user.SetName()` — `common/style-naming`.
+- Interface names: single-method interfaces use `-er` suffix: `Reader`, `Writer`, `Closer`, `Stringer` — `common/style-naming`.
+- Comment every exported name. Comments start with the name: `// Server represents an HTTP server.` — `common/style-readability`
+- No `init()` unless absolutely necessary — it hides side effects and makes testing harder — `common/hidden-side-effect`.
 
 ## Prefer Modern Features
 
@@ -57,46 +57,46 @@ Findings from this table are `common/language-idiom` unless a row's pattern also
 
 ## Type System
 
-- **Prefer small interfaces**: Interfaces with 1-2 methods are idiomatic Go. Flag interfaces with 5+ methods — likely too broad.
-- **Define interfaces at the consumer, not the provider**: The package that *uses* the interface should define it. Flag interfaces defined next to their only implementation.
-- **Accept interfaces, return structs**: Functions should accept interfaces for flexibility but return concrete types for clarity.
-- **Struct embedding**: Use for composition, not inheritance. Flag embedded types that expose methods the outer type shouldn't have.
-- **Generics**: Use for containers, algorithms, and utility functions. Flag generic code where a concrete type or interface would be simpler — don't over-generalize. Since 1.27 a method may declare its own type parameters (`func (s *Set[T]) Map[U any](f func(T) U) *Set[U]`); do not flag that as a compile error. Interface methods still cannot declare type parameters, and a generic method cannot satisfy an interface method.
-- **Type aliases vs definitions**: `type UserID string` (new type, prevents mixing) vs `type UserID = string` (alias, interchangeable). Flag aliases where a distinct type would provide safety.
+- **Prefer small interfaces**: Interfaces with 1-2 methods are idiomatic Go. Flag interfaces with 5+ methods — likely too broad — `common/interface-segregation`.
+- **Define interfaces at the consumer, not the provider**: The package that *uses* the interface should define it. Flag interfaces defined next to their only implementation — `common/language-idiom`.
+- **Accept interfaces, return structs**: Functions should accept interfaces for flexibility but return concrete types for clarity — `common/language-idiom`.
+- **Struct embedding**: Use for composition, not inheritance. Flag embedded types that expose methods the outer type shouldn't have — `common/language-idiom`.
+- **Generics**: Use for containers, algorithms, and utility functions. Flag generic code where a concrete type or interface would be simpler — don't over-generalize — `common/language-idiom`. Since 1.27 a method may declare its own type parameters (`func (s *Set[T]) Map[U any](f func(T) U) *Set[U]`); do not flag that as a compile error. Interface methods still cannot declare type parameters, and a generic method cannot satisfy an interface method.
+- **Type aliases vs definitions**: `type UserID string` (new type, prevents mixing) vs `type UserID = string` (alias, interchangeable). Flag aliases where a distinct type would provide safety — `common/weak-type-model`.
 
 ## Functional Patterns
 
 Go is not a functional language, but these patterns apply:
 
-- Prefer value semantics over pointer semantics when structs are small — reduces aliasing bugs
-- Flag mutation of slice/map parameters without documentation — callers may not expect it
-- Prefer returning new slices/maps over mutating inputs
-- Use functional options pattern (`func WithTimeout(d time.Duration) Option`) for configurable constructors
-- First-class functions: use function types and closures for strategy patterns, middleware, decorators
-- Flag global mutable state (`var` at package level) — inject dependencies instead
+- Prefer value semantics over pointer semantics when structs are small — reduces aliasing bugs — `common/language-idiom`
+- Flag mutation of slice/map parameters without documentation — callers may not expect it — `common/hidden-side-effect`
+- Prefer returning new slices/maps over mutating inputs — `common/unnecessary-mutation`
+- Use functional options pattern (`func WithTimeout(d time.Duration) Option`) for configurable constructors — `common/language-idiom`
+- First-class functions: use function types and closures for strategy patterns, middleware, decorators — `common/language-idiom`
+- Flag global mutable state (`var` at package level) — inject dependencies instead — `common/shared-mutable-state`
 
 ## Error Handling
 
 Go's explicit error handling is a feature, not a problem. Review it carefully:
 
-- **Never** `_ = someFunc()` that returns an error — BLOCKER unless explicitly justified
-- **Never** bare `if err != nil { return err }` without wrapping context — use `fmt.Errorf("doing X: %w", err)` for wrapped errors
-- Flag error messages starting with uppercase or ending with punctuation — Go convention is lowercase, no period
+- **Never** `_ = someFunc()` that returns an error — `common/ignored-error`, unless explicitly justified
+- **Never** bare `if err != nil { return err }` without wrapping context — use `fmt.Errorf("doing X: %w", err)` for wrapped errors — `common/incomplete-error-handling`
+- Flag error messages starting with uppercase or ending with punctuation — Go convention is lowercase, no period — `common/language-idiom`
 - Flag `panic` in library code on input-derived or recoverable conditions — `go/panic-in-library`. Return an `error` instead. Panics belong in `main`, in `init`, and in `Must*` helpers whose argument is a compile-time constant (`regexp.MustCompile`).
-- Flag `log.Fatal` / `os.Exit` in library code — it kills the process. Only allowed in `main`.
-- Encourage sentinel errors (`var ErrNotFound = errors.New(...)`) for expected failure modes
-- Encourage custom error types implementing `error` for errors carrying structured data
-- Flag `errors.New` in hot paths — pre-allocate as package-level vars
-- Use `errors.Is()` and `errors.AsType[E]()` (1.26+; `errors.As()` before that) for checking — not string comparison or type assertions
+- Flag `log.Fatal` / `os.Exit` in library code — it kills the process. Only allowed in `main` — `go/panic-in-library`.
+- Encourage sentinel errors (`var ErrNotFound = errors.New(...)`) for expected failure modes — `common/erased-failure`
+- Encourage custom error types implementing `error` for errors carrying structured data — `common/erased-failure`
+- Flag `errors.New` in hot paths — pre-allocate as package-level vars — `common/hot-path-allocation`
+- Use `errors.Is()` and `errors.AsType[E]()` (1.26+; `errors.As()` before that) for checking — not string comparison or type assertions — `common/language-idiom`
 
 ## Standard Library HTTP (`net/http`)
 
-- Use `http.NewServeMux` (1.22+) with method-based routing: `mux.HandleFunc("GET /users/{id}", handler)`
-- Flag `http.DefaultServeMux` in production — it's a global, shared across packages
+- Use `http.NewServeMux` (1.22+) with method-based routing: `mux.HandleFunc("GET /users/{id}", handler)` — `common/language-idiom`
+- Flag `http.DefaultServeMux` in production — it's a global, shared across packages — `common/shared-mutable-state`
 - Set timeouts on `http.Server`: `ReadTimeout`, `WriteTimeout`, `IdleTimeout`. Flag zero-value servers — `common/insecure-default` (slowloris risk).
-- Flag handlers that don't check `r.Context().Done()` for long-running operations
-- Use `http.MaxBytesReader` on request bodies — flag unbounded `io.ReadAll(r.Body)` (DoS risk)
-- Middleware: use `func(http.Handler) http.Handler` pattern. Flag middleware that doesn't call `next.ServeHTTP`.
+- Flag handlers that don't check `r.Context().Done()` for long-running operations — `common/unmanaged-concurrency`
+- Use `http.MaxBytesReader` on request bodies — flag unbounded `io.ReadAll(r.Body)` (DoS risk) — `common/missing-input-validation`
+- Middleware: use `func(http.Handler) http.Handler` pattern. Flag middleware that doesn't call `next.ServeHTTP` on its success path — `common/api-misuse`.
 - **CSRF**: Since 1.25, `http.CrossOriginProtection` rejects unsafe cross-origin browser requests using Fetch metadata, with no tokens. Flag cookie-authenticated state-changing endpoints with no CSRF protection — `common/insecure-default`. Prefer `CrossOriginProtection` over a hand-rolled token check — `common/language-idiom`.
 - **User-supplied paths**: Flag `filepath.Join(base, userPath)` followed by `os.Open` — `common/path-traversal`. Since 1.24, open files through `os.OpenRoot(base)` / `os.Root`, which rejects paths that escape the root, including through symlinks.
 - **Reverse proxies**: Flag `httputil.ReverseProxy.Director` — `common/deprecated-api` (deprecated in 1.26: a client can strip headers the `Director` adds by naming them hop-by-hop). Use `Rewrite`.
@@ -108,57 +108,55 @@ Go's explicit error handling is a feature, not a problem. Review it carefully:
 
 ## Gin
 
-- **Context abuse**: `gin.Context` is both request context and response writer. Flag storing `*gin.Context` beyond the handler scope — it's not safe after the handler returns.
-- **Binding and validation**: Use `ShouldBindJSON` (returns error) not `BindJSON` (writes 400 automatically). Let the handler control the error response.
-- **Middleware**: Flag `c.Next()` misuse. `c.Abort()` should be followed by a return.
-- **Route grouping**: Group routes by resource/domain. Flag flat route registration with 20+ routes.
-- **Error handling**: Use `c.Error()` to collect errors and handle them in middleware, not `c.JSON(500, ...)` scattered in handlers.
-- **Avoid global Gin engine**: Flag `gin.Default()` at package level. Create the engine in `main` or a constructor.
+- **Context abuse**: `gin.Context` is both request context and response writer. Flag storing `*gin.Context` beyond the handler scope — it's not safe after the handler returns — `common/shared-mutable-state`.
+- **Binding and validation**: Use `ShouldBindJSON` (returns error) not `BindJSON` (writes 400 automatically). Let the handler control the error response — `common/incomplete-error-handling`.
+- **Middleware**: Flag `c.Next()` misuse. `c.Abort()` should be followed by a return — `common/incomplete-error-handling`.
+- **Route grouping**: Group routes by resource/domain. Flag flat route registration with 20+ routes — `common/style-readability`.
+- **Error handling**: Use `c.Error()` to collect errors and handle them in middleware, not `c.JSON(500, ...)` scattered in handlers — `common/duplicated-logic`.
+- **Avoid global Gin engine**: Flag `gin.Default()` at package level. Create the engine in `main` or a constructor — `common/shared-mutable-state`.
 
 ## gRPC
 
-- **Proto design**: Flag overly large messages (50+ fields). Use composition with nested messages.
-- **Error codes**: Use proper gRPC status codes (`codes.NotFound`, `codes.InvalidArgument`). Flag `codes.Internal` for all errors — be specific.
-- **Interceptors**: Use interceptors for cross-cutting concerns (auth, logging, tracing). Flag auth checks in individual RPC methods.
-- **Streaming**: Flag server-side streams that don't check `stream.Context().Err()` — clients may disconnect.
-- **Deadlines**: Flag RPC calls without deadline/timeout set on the context — `context.WithTimeout`. Unbounded RPCs can hang forever.
+- **Error codes**: Use proper gRPC status codes (`codes.NotFound`, `codes.InvalidArgument`). Flag `codes.Internal` for all errors — be specific — `common/erased-failure`.
+- **Interceptors**: Use interceptors for cross-cutting concerns (auth, logging, tracing). Flag auth checks in individual RPC methods — `common/duplicated-logic`.
+- **Streaming**: Flag server-side streams that don't check `stream.Context().Err()` — clients may disconnect — `common/unmanaged-concurrency`.
+- **Deadlines**: Flag RPC calls without deadline/timeout set on the context — `context.WithTimeout`. Unbounded RPCs can hang forever — `common/missing-timeout`.
 
 ## Concurrency
 
 Go concurrency requires careful review:
 
 - **Goroutine lifecycle**: Every `go func()` must have a clear termination path. Flag goroutines without cancellation (context) or done channels — goroutine leak risk, `common/unmanaged-concurrency`.
-- **Prefer `errgroup.Group`** over bare goroutine spawning — manages lifecycle, collects errors, propagates cancellation.
-- **Channel direction**: Function parameters should specify direction (`chan<- T` or `<-chan T`). Flag bidirectional channels in function signatures.
-- **Mutex scope**: Keep critical sections small. Flag mutexes protecting entire function bodies — rethink the design.
-- **sync.Once for initialization**: Flag double-checked locking patterns — use `sync.Once`.
-- **Race conditions**: Flag shared state accessed from goroutines without synchronization. Suggest `-race` flag in tests.
-- **Context propagation**: Pass `context.Context` through the call chain. Flag functions that create their own `context.Background()` when a caller could provide one.
-- **Select with default**: Flag `select` with `default` in loops without a sleep/backoff — busy loop (CPU burn).
+- **Prefer `errgroup.Group`** over bare goroutine spawning — manages lifecycle, collects errors, propagates cancellation — `common/unmanaged-concurrency`.
+- **Channel direction**: Function parameters should specify direction (`chan<- T` or `<-chan T`). Flag bidirectional channels in function signatures — `common/language-idiom`.
+- **sync.Once for initialization**: Flag double-checked locking patterns — use `sync.Once` — `common/shared-mutable-state`.
+- **Race conditions**: Flag shared state accessed from goroutines without synchronization. Suggest `-race` flag in tests — `common/shared-mutable-state`.
+- **Context propagation**: Pass `context.Context` through the call chain. Flag functions that create their own `context.Background()` when a caller could provide one — `common/unmanaged-concurrency`.
+- **Select with default**: Flag `select` with `default` in loops without a sleep/backoff — busy loop (CPU burn) — `common/busy-wait`.
 - **Leak evidence**: Since 1.27 the `goroutineleak` profile (`runtime/pprof`, `/debug/pprof/goroutineleak`) reports leaked goroutines. When a leak finding is disputed, point to it as the way to confirm.
 
 ## Testing
 
-- Table-driven tests: use `[]struct{ name string; ... }` with `t.Run(tc.name, ...)`. Flag repetitive test functions that could be parameterized.
-- `t.Helper()`: call in test helper functions for correct error line reporting.
-- `t.Parallel()`: encourage for independent tests. Flag tests that share mutable state.
-- Prefer stdlib `testing` over testify when possible. If using testify, use `assert` (continues) vs `require` (stops) deliberately.
-- `t.Cleanup()` for teardown instead of `defer` — survives subtests.
+- Table-driven tests: use `[]struct{ name string; ... }` with `t.Run(tc.name, ...)`. Flag repetitive test functions that could be parameterized — `common/duplicated-logic`.
+- `t.Helper()`: call in test helper functions for correct error line reporting — `common/language-idiom`.
+- `t.Parallel()`: encourage for independent tests. Flag tests that share mutable state — `common/shared-mutable-state`.
+- Prefer stdlib `testing` over testify when possible. If using testify, use `assert` (continues) vs `require` (stops) deliberately — `common/language-idiom`.
+- `t.Cleanup()` for teardown instead of `defer` — survives subtests — `common/language-idiom`.
 - Since 1.24: use `t.Context()` instead of `context.Background()` in tests, `t.Chdir` instead of `os.Chdir`, and `for b.Loop()` instead of `for i := 0; i < b.N; i++` in benchmarks — `common/language-idiom`.
-- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization. For testing concurrent code with virtual time, prefer `testing/synctest` (GA in 1.25) over real sleeps; since 1.27, `synctest.Sleep` combines `time.Sleep` and `synctest.Wait`.
-- For HTTP handlers: use `httptest.NewRecorder()` and `httptest.NewRequest()`.
-- Flag tests that depend on network, filesystem, or environment without build tags or skip conditions.
+- Flag `time.Sleep` in tests — use channels, tickers, or `testing.T` deadlines for synchronization. For testing concurrent code with virtual time, prefer `testing/synctest` (GA in 1.25) over real sleeps — `common/nondeterministic-dependency`; since 1.27, `synctest.Sleep` combines `time.Sleep` and `synctest.Wait`.
+- For HTTP handlers: use `httptest.NewRecorder()` and `httptest.NewRequest()` — `common/language-idiom`.
+- Flag tests that depend on network, filesystem, or environment without build tags or skip conditions — `common/nondeterministic-dependency`.
 
 ## Common Enterprise Anti-Patterns
 
-- **Interface pollution**: Defining interfaces before there are multiple implementations. Define interfaces at the consumer when you actually need the abstraction.
-- **Package `util` / `common` / `helpers`**: Dumping ground for unrelated functions. Name packages by what they provide, not by how vague they are.
-- **Premature channels**: Using channels for simple mutex-protected state. Channels are for communication between goroutines, not as a generic synchronization primitive.
-- **Ignoring context**: Functions that accept `context.Context` but don't pass it to downstream calls. Every I/O call should respect context.
-- **Over-packaging**: 50 packages for a simple service. Go favors fewer, larger packages over Java-style one-class-per-package.
-- **Error string matching**: `if err.Error() == "not found"` — fragile. Use sentinel errors or `errors.Is`.
-- **Pointer overuse**: Using `*Foo` everywhere "for performance." Value semantics are often faster (less GC pressure) and safer for small structs.
-- **Missing graceful shutdown**: `http.ListenAndServe` without signal handling. Use `signal.NotifyContext` + `server.Shutdown(ctx)`.
+- **Interface pollution**: Defining interfaces before there are multiple implementations. Define interfaces at the consumer when you actually need the abstraction — `common/language-idiom`.
+- **Package `util` / `common` / `helpers`**: Dumping ground for unrelated functions. Name packages by what they provide, not by how vague they are — `common/god-module`.
+- **Premature channels**: Using channels for simple mutex-protected state. Channels are for communication between goroutines, not as a generic synchronization primitive — `common/language-idiom`.
+- **Ignoring context**: Functions that accept `context.Context` but don't pass it to downstream calls. Every I/O call should respect context — `common/unmanaged-concurrency`.
+- **Over-packaging**: 50 packages for a simple service. Go favors fewer, larger packages over Java-style one-class-per-package — `common/speculative-abstraction`.
+- **Error string matching**: `if err.Error() == "not found"` — fragile. Use sentinel errors or `errors.Is` — `common/language-idiom`.
+- **Pointer overuse**: Using `*Foo` everywhere "for performance." Value semantics are often faster (less GC pressure) and safer for small structs — `common/language-idiom`.
+- **Missing graceful shutdown**: `http.ListenAndServe` without signal handling. Use `signal.NotifyContext` + `server.Shutdown(ctx)` — `common/graceful-shutdown`.
 
 ## Change Risk
 

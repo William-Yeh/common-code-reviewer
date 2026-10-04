@@ -73,6 +73,7 @@ jobs:
           uv run tests/scripts/run_conformance.py
           --model sonnet
           --max-budget-usd 0.50
+          --min-recall 0.89
           --report conformance-report.json
 
       - name: Upload conformance evidence

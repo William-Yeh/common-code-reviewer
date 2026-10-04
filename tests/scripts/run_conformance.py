@@ -213,10 +213,7 @@ def format_summary(summary: Summary, runs: int) -> str:
 def summarize_reports(paths: list[Path]) -> str:
     severities = load_severities()
 
-    def load_fixture(name: str) -> dict[str, object]:
-        return yaml.safe_load((REPO_ROOT / name).read_text())
-
-    runs = [score_report(json.loads(path.read_text()), load_fixture, severities) for path in paths]
+    runs = [score_report(json.loads(path.read_text()), fixture_loader, severities) for path in paths]
     return format_summary(summarize_runs(runs), len(runs))
 
 
@@ -333,6 +330,35 @@ def score_result(
     }
 
 
+def clean_run(results: list[dict[str, object]]) -> bool:
+    """No runtime error, forbidden finding, or severity drift in any fixture."""
+    return not any(
+        "runtime_error" in result or result["forbidden"] or result["interface_errors"]
+        for result in results
+    )
+
+
+def verdict(
+    results: list[dict[str, object]], recall: tuple[int, int], min_recall: float | None
+) -> bool:
+    """Whether a run passes: every fixture without a threshold; otherwise clean and above it."""
+    if min_recall is None:
+        return all(result["passed"] for result in results)
+    found, total = recall
+    return clean_run(results) and total > 0 and found / total >= min_recall
+
+
+def fixture_loader(name: str) -> dict[str, object]:
+    return yaml.safe_load((REPO_ROOT / name).read_text())
+
+
+def recall_fraction(value: str) -> float:
+    fraction = float(value)
+    if not 0.0 <= fraction <= 1.0:
+        raise argparse.ArgumentTypeError("must be between 0 and 1")
+    return fraction
+
+
 def run_fixture(path: Path, args: argparse.Namespace, severities: dict[str, str]) -> dict[str, object]:
     name = str(path.relative_to(REPO_ROOT))
     fixture = yaml.safe_load(path.read_text())
@@ -361,6 +387,11 @@ def argument_parser() -> argparse.ArgumentParser:
         "--summarize", type=Path, nargs="+", metavar="REPORT",
         help="print recall per rule across saved reports and exit; makes no model calls",
     )
+    parser.add_argument(
+        "--min-recall", type=recall_fraction, metavar="FRACTION",
+        help="pass when recall reaches FRACTION with no runtime error, forbidden finding, or "
+        "severity drift, instead of requiring every expectation to be found",
+    )
     return parser
 
 
@@ -383,10 +414,14 @@ def main() -> None:
         "fixtures": [run_fixture(path, args, severities) for path in fixtures],
     }
     report["finished_at"] = datetime.now(UTC).isoformat()
-    report["passed"] = all(result["passed"] for result in report["fixtures"])
+    rows = score_report(report, fixture_loader, severities)
+    recall = (sum(row[3] for row in rows), len(rows))
+    report["recall"] = list(recall)
+    report["min_recall"] = args.min_recall
+    report["passed"] = verdict(report["fixtures"], recall, args.min_recall)
     args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {args.report}")
-    print(summarize_reports([args.report]).split("\n")[0])
+    print(f"recall {recall[0]}/{recall[1]} ({recall[0] / max(recall[1], 1):.1%}) over 1 run(s)")
     sys.exit(0 if report["passed"] else 1)
 
 

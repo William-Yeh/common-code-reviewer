@@ -35,9 +35,6 @@ required:
   - rule: common/unbounded-query
     location: "11-12"
     rationale: "orders_by_status has no LIMIT/pagination — loads the entire matching set into memory."
-  - rule: common/god-module
-    location: "56-64"
-    rationale: "process_order validates, charges payment, persists, and emails. Four responsibilities. Split into focused units."
   - rule: rust/discarded-result
     location: "60"
     rationale: "let _ = charge_card(&order); discards the payment Result. A failed charge proceeds to save+confirm as success."

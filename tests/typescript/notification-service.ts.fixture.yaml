@@ -18,8 +18,8 @@ required:
     location: "8-16"
     rationale: "INotificationChannel has 7 methods. An SMS-only implementation would need to stub sendEmail, sendPush, sendSlack, generateReport, etc. Split into focused interfaces."
   - rule: common/layer-violation
-    location: "1, 4-5"
-    rationale: "Domain notification logic imports infrastructure directly: express Request/Response, axios and fs. HTTP, filesystem and web-framework concerns should sit behind ports injected from outside."
+    location: "1, 4-5, 48, 52, 61, 71, 79, 84, 92, 102-103, 109, 114-115, 118-119, 142, 144, 148, 151"
+    rationale: "Notification logic depends on infrastructure directly: express Request/Response, axios and fs are imported and then called from the domain functions and the scheduler. Every import, every axios/fs call, and the declaration of each function or class that makes one is an instance; HTTP, filesystem and web-framework concerns should sit behind ports injected from outside."
   - rule: common/anemic-domain
     location: "158-166"
     rationale: "Notification class is a pure data bag. All behavior (sending, scheduling, stats) lives in standalone functions. Move behavior into the domain object or use a proper service layer."

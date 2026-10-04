@@ -29,43 +29,43 @@ Flag legacy patterns when modern alternatives exist. Findings from this table ar
 
 ### Flags
 
-- **`any` leakage**: Any `any` in new code is MAJOR unless explicitly justified with a comment. Check for implicit `any` from untyped dependencies.
-- **Missing return types on public APIs**: Exported functions should have explicit return types. Internal functions can rely on inference.
+- **`any` leakage**: Flag `any` in new code unless it is explicitly justified with a comment — `common/weak-type-model`. Check for implicit `any` from untyped dependencies.
+- **Missing return types on public APIs**: Exported functions should have explicit return types. Internal functions can rely on inference. — `common/language-idiom`
 - **Double assertions**: `x as unknown as T` (or `as any as T`) overrides the compiler's "neither type sufficiently overlaps" error (TS2352), so it usually hides a type error — `common/weak-type-model`. Prefer a type guard or a typed boundary. Accept it in test doubles and in a branded-type constructor.
-- **Non-null assertions (`!`)**: Flag unless the author explains why null is impossible. Prefer optional chaining or early returns.
-- **Overly broad types**: `string` where a union of literals would enforce correctness. `object` where a specific shape exists.
+- **Non-null assertions (`!`)**: Flag unless the author explains why null is impossible. Prefer optional chaining or early returns. — `common/weak-type-model`
+- **Overly broad types**: `string` where a union of literals would enforce correctness. `object` where a specific shape exists. — `common/weak-type-model`
 
 ### Patterns to Encourage
 
-- Discriminated unions for state machines and variant types
-- `satisfies` for validating object shapes while preserving literal types
-- `const` assertions (`as const`) for readonly tuples and literal types
-- Template literal types for string patterns
-- Branded types for domain primitives (e.g., `UserId`, `Email`)
-- `readonly` on array/object parameters that shouldn't be mutated
-- `using` / `await using` for resource management (Explicit Resource Management)
+- Discriminated unions for state machines and variant types — `common/weak-type-model`
+- `satisfies` for validating object shapes while preserving literal types — `common/language-idiom`
+- `const` assertions (`as const`) for readonly tuples and literal types — `common/language-idiom`
+- Template literal types for string patterns — `common/language-idiom`
+- Branded types for domain primitives (e.g., `UserId`, `Email`) — `common/weak-type-model`
+- `readonly` on array/object parameters that shouldn't be mutated — `common/unnecessary-mutation`
+- `using` / `await using` for resource management (Explicit Resource Management) — `common/language-idiom`
 - Hand-written regex escaping (`str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`) — prefer `RegExp.escape`. An incomplete hand-written escaper on untrusted input is a regex-injection and ReDoS risk — `common/missing-input-validation`.
-- For published libraries: explicit return/export types to enable `isolatedDeclarations` (5.5+) — faster, parallelizable `.d.ts` emit. Flag exported APIs relying on inferred types in packages that ship declarations.
+- For published libraries: explicit return/export types to enable `isolatedDeclarations` (5.5+) — faster, parallelizable `.d.ts` emit. Flag exported APIs relying on inferred types in packages that ship declarations. — `common/language-idiom`
 
 ## Functional Patterns
 
-- Prefer `map`/`filter`/`reduce`/`flatMap` over `for` loops when the intent is transformation
-- Flag `forEach` with side effects — if you're not returning a value, use `for...of` for clarity
-- Encourage pure functions: same input, same output, no mutations
-- Flag mutation of function parameters — use spread or `structuredClone`
-- Prefer `Object.freeze` / `as const` / `readonly` for data that shouldn't change
-- Encourage pipe/compose patterns when chaining 3+ transformations
+- Prefer `map`/`filter`/`reduce`/`flatMap` over `for` loops when the intent is transformation — `common/imperative-transformation`
+- Flag `forEach` with side effects — if you're not returning a value, use `for...of` for clarity — `common/style-readability`
+- Encourage pure functions: same input, same output, no mutations — `common/hidden-side-effect`
+- Flag mutation of function parameters — use spread or `structuredClone` — `common/unnecessary-mutation`
+- Prefer `Object.freeze` / `as const` / `readonly` for data that shouldn't change — `common/unnecessary-mutation`
+- Encourage pipe/compose patterns when chaining 3+ transformations — `common/imperative-transformation`
 
 ## Error Handling
 
-- **Never** catch and ignore: `catch (e) {}` is BLOCKER
-- Prefer typed error results over thrown exceptions for expected failures. Use discriminated unions:
+- **Never** catch and ignore: flag `catch (e) {}` — `common/ignored-error`
+- Prefer typed error results over thrown exceptions for expected failures. Use discriminated unions — `common/erased-failure`:
   ```typescript
   type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
   ```
-- `catch (e: unknown)` — never assume error type. Use `instanceof` or type guard.
-- Avoid `catch` at every level — let errors propagate to a boundary handler
-- Flag `console.log` / `console.error` in production code — use a structured logger
+- `catch (e: unknown)` — never assume error type. Use `instanceof` or type guard. — `common/weak-type-model`
+- Avoid `catch` at every level — let errors propagate to a boundary handler — `common/incomplete-error-handling`
+- Flag `console.log` / `console.error` in production code — use a structured logger — `common/language-idiom`
 
 ## Compiler and Toolchain Configuration
 
@@ -85,10 +85,10 @@ Follow **ESLint recommended** + **typescript-eslint** (flat config) conventions.
 - Trailing commas in multiline structures (less noisy diffs)
 - Semicolons required
 - Single quotes for strings (double quotes in JSX)
-- Explicit function return types on exports
+- Explicit function return types on exports — `common/language-idiom`
 - No default exports (named exports keep one name per symbol across importers) — `common/style-naming`
 - Imports ordered: external → internal → relative, each group alphabetized
-- Prefer `type` imports (`import type { Foo }`) to avoid runtime import of types
+- Prefer `type` imports (`import type { Foo }`) to avoid runtime import of types — `common/language-idiom`
 
 Do not flag style issues that ESLint/Prettier would catch. Only flag style when it affects semantics or readability beyond formatter scope.
 
@@ -96,56 +96,55 @@ Do not flag style issues that ESLint/Prettier would catch. Only flag style when 
 
 Check whether React Compiler is enabled (`babel-plugin-react-compiler`, or `reactCompiler: true` in `next.config`). It memoizes automatically, which changes the memoization advice below.
 
-- Flag `useEffect` with missing or incorrect dependency arrays
+- Flag `useEffect` with missing or incorrect dependency arrays — `common/api-misuse`
 - Flag `// eslint-disable-next-line react-hooks/exhaustive-deps` used to leave a dependency out — `common/hidden-side-effect`. Since React 19.2, move the non-reactive logic into `useEffectEvent`.
-- Flag `useEffect` used for derived state — compute it during render; reach for `useMemo` only when the compiler is off and the computation is measurably expensive
-- Flag `useState` for values derivable from props or other state
-- Without React Compiler: flag inline object/array/function literals passed to memoized children (they defeat `memo`). With React Compiler: do not flag them, and do not ask for new `useMemo`/`useCallback`; keep them only as an escape hatch, such as stabilizing an effect dependency. Do not ask for existing memoization to be removed either.
-- Flag components over ~100 lines — likely needs decomposition
-- Encourage custom hooks to extract reusable stateful logic
-- `key` prop: flag array index as key when list items can reorder
-- Prefer Server Components by default in Next.js App Router — only add `"use client"` when necessary
-- Flag prop drilling through 3+ levels — use context or composition
+- Flag `useEffect` used for derived state — compute it during render; reach for `useMemo` only when the compiler is off and the computation is measurably expensive — `common/unnecessary-mutation`
+- Flag `useState` for values derivable from props or other state — `common/unnecessary-mutation`
+- Without React Compiler: flag inline object/array/function literals passed to memoized children (they defeat `memo`) — `common/hot-path-allocation`. With React Compiler: do not flag them, and do not ask for new `useMemo`/`useCallback`; keep them only as an escape hatch, such as stabilizing an effect dependency. Do not ask for existing memoization to be removed either.
+- Flag components over ~100 lines — likely needs decomposition — `common/god-module`
+- Encourage custom hooks to extract reusable stateful logic — `common/duplicated-logic`
+- `key` prop: flag array index as key when list items can reorder or be inserted — `common/api-misuse`
+- Prefer Server Components by default in Next.js App Router — only add `"use client"` when necessary — `common/language-idiom`
+- Flag prop drilling through 3+ levels — use context or composition — `common/missing-abstraction`
 
 ## NestJS
 
-- **Module boundaries**: Each module should encapsulate a bounded context. Flag cross-module direct imports that bypass the module system.
-- **Dependency injection**: Flag `new Service()` inside controllers/services. Use constructor injection.
-- **DTOs and validation**: All API inputs must have DTO classes with `class-validator` decorators. Flag raw `@Body()` without a DTO type.
-- **Guards over middleware**: Prefer guards (`@UseGuards`) for auth/authorization over Express middleware.
-- **Exception filters**: Use domain-specific exception classes, not raw `HttpException` with hardcoded status codes.
-- **Circular dependencies**: Flag `forwardRef()` — usually indicates a design problem. Suggest extracting a shared module.
-- **Repository pattern**: Data access logic belongs in repositories/services, not controllers.
+- **Module boundaries**: Each module should encapsulate a bounded context. Flag cross-module direct imports that bypass the module system. — `common/layer-violation`
+- **Dependency injection**: Flag `new Service()` inside controllers/services. Use constructor injection. — `common/hard-coded-dependency`
+- **DTOs and validation**: All API inputs must have DTO classes with `class-validator` decorators. Flag raw `@Body()` without a DTO type. — `common/missing-input-validation`
+- **Guards over middleware**: Prefer guards (`@UseGuards`) for auth/authorization over Express middleware. — `common/language-idiom`
+- **Exception filters**: Use domain-specific exception classes, not raw `HttpException` with hardcoded status codes. — `common/erased-failure`
+- **Circular dependencies**: Flag `forwardRef()` — usually indicates a design problem. Suggest extracting a shared module. — `common/circular-dependency`
+- **Repository pattern**: Data access logic belongs in repositories/services, not controllers. — `common/layer-violation`
 
 ## Next.js (App Router)
 
-- **Server vs Client**: Flag `"use client"` on components that don't use hooks, event handlers, or browser APIs — they should be Server Components.
-- **Data fetching**: Prefer `fetch` in Server Components over client-side `useEffect` + `useState`. Use React Server Components for data loading.
-- **Route handlers**: Flag business logic in `route.ts` — it belongs in a service layer.
-- **Server Actions**: Validate all inputs in server actions — they're publicly accessible endpoints. Use Zod or similar.
-- **Metadata**: Flag pages missing `metadata` or `generateMetadata` exports.
-- **Loading/Error states**: Flag route segments missing `loading.tsx` and `error.tsx` boundaries.
+- **Server vs Client**: Flag `"use client"` on components that don't use hooks, event handlers, or browser APIs — they should be Server Components. — `common/language-idiom`
+- **Data fetching**: Prefer `fetch` in Server Components over client-side `useEffect` + `useState`. Use React Server Components for data loading. — `common/language-idiom`
+- **Route handlers**: Flag business logic in `route.ts` — it belongs in a service layer. — `common/layer-violation`
+- **Server Actions**: Validate all inputs in server actions — they're publicly accessible endpoints. Use Zod or similar. — `common/missing-input-validation`
+- **Metadata**: Flag pages missing `metadata` or `generateMetadata` exports. — `common/language-idiom`
+- **Loading/Error states**: Flag route segments missing `loading.tsx` and `error.tsx` boundaries. — `common/incomplete-error-handling`
 - **Caching (Next.js 16+)**: Caching is opt-in. With `cacheComponents: true`, cache with the `'use cache'` directive plus `cacheLife` / `cacheTag`; do not flag `fetch` calls for lacking `cache` or `revalidate` options. Flag single-argument `revalidateTag(tag)` — `common/deprecated-api`; pass a `cacheLife` profile (`revalidateTag(tag, 'max')`), or call `updateTag(tag)` inside a Server Action that needs read-your-writes.
-- **Caching (Next.js 14–15)**: Be explicit about caching — flag `fetch` calls without `cache` or `revalidate` options in production code.
+- **Caching (Next.js 14–15)**: Be explicit about caching — flag `fetch` calls without `cache` or `revalidate` options in production code. — `common/language-idiom`
 - **Request APIs (Next.js 16+)**: `cookies()`, `headers()`, `draftMode()`, and the `params` / `searchParams` props are async only. Flag synchronous access — `common/deprecated-api`.
 - **Proxy (Next.js 16+)**: `middleware.ts` is deprecated in favor of `proxy.ts`, which runs on the Node.js runtime. Flag new `middleware.ts` files — `common/deprecated-api`.
 
 ## Testing
 
-- Prefer `describe`/`it` structure with intention-revealing test names
-- Flag tests that test implementation details (e.g., asserting internal state, method call counts) over behavior
-- Flag missing edge case tests: null, empty array, boundary values
-- Mock at module boundaries, not deep internals
-- Flag `any` in test code — tests should be type-safe too
-- Prefer `toEqual` over `toBe` for objects; prefer `toStrictEqual` when undefined properties matter
+- Prefer `describe`/`it` structure with intention-revealing test names — `common/unclear-name`
+- Flag tests that test implementation details (e.g., asserting internal state, method call counts) over behavior — `common/brittle-test`
+- Mock at module boundaries, not deep internals — `common/brittle-test`
+- Flag `any` in test code — tests should be type-safe too — `common/weak-type-model`
+- Prefer `toEqual` over `toBe` for objects; prefer `toStrictEqual` when undefined properties matter — `common/brittle-test`
 
 ## Common Enterprise Anti-Patterns
 
-- **Barrel files that re-export everything**: Kills tree-shaking, creates circular dependency risks
-- **God services**: A `UserService` with 20+ methods — split by use case
-- **Shared mutable singletons**: Module-level `let` state accessed by multiple consumers
-- **String-typed APIs**: Using `string` for IDs, statuses, types — use branded types or unions
-- **Callback hell in legacy code being modified**: If touching it, refactor to async/await
+- **Barrel files that re-export everything**: Kills tree-shaking, creates circular dependency risks — `common/language-idiom`
+- **God services**: A `UserService` with 20+ methods — split by use case — `common/god-module`
+- **Shared mutable singletons**: Module-level `let` state accessed by multiple consumers — `common/shared-mutable-state`
+- **String-typed APIs**: Using `string` for IDs, statuses, types — use branded types or unions — `common/weak-type-model`
+- **Callback hell in legacy code being modified**: If touching it, refactor to async/await — `common/deep-nesting`
 - **Default exports**: Prefer named exports for refactoring safety and IDE support — `common/style-naming`
 
 ## Change Risk

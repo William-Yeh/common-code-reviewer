@@ -14,9 +14,9 @@ required:
   - rule: common/god-module
     location: "8"
     rationale: "God controller — mixes HTTP handling, business logic, data access, and caching in a single class. Should separate into Controller → Service → Repository layers."
-  - rule: common/dependency-inversion
+  - rule: common/layer-violation
     location: "9-10"
-    rationale: "`@Inject() private dataSource: DataSource` binds the controller to TypeORM's concrete DataSource and raw SQL instead of a repository abstraction it owns; the field injection also hides the dependency from the constructor."
+    rationale: "The controller holds TypeORM's DataSource and runs raw SQL itself, so presentation code depends directly on infrastructure. That is common/layer-violation: move data access into a repository the controller calls."
   - rule: common/weak-type-model
     location: "5, 19, 38, 44, 56"
     rationale: "any type used in multiple places: orderCache, body parameters, results array, notifyWarehouse parameter. Disables type safety."

@@ -38,6 +38,18 @@ Review Conformance evidence produced by one explicitly identified runtime and
 model. A Conformance Run does not certify other compatible runtimes.
 _Avoid_: Universal conformance, skill certification
 
+**Recall**:
+Required Review Findings found divided by required Review Findings expected,
+summed over several Conformance Runs of one model. Recall, not the number of
+fixtures that pass, is how a change to the skill is judged.
+_Avoid_: Pass rate, accuracy
+
+**Systematic Miss**:
+A required Review Finding that no Conformance Run in a set produced. It points
+at the skill or at the expectation, unlike a **Flaky Expectation**, which some
+runs produce and others do not.
+_Avoid_: Failure, regression
+
 ## Change Risk
 
 **CRAP Score**:

@@ -4,7 +4,7 @@ description: Use when the user asks to review code, audit changes, or review a P
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
-  version: 1.6.0
+  version: 1.7.0
 ---
 
 # Code Review
@@ -79,6 +79,7 @@ uncataloged guidance.
 | `common/circular-dependency` | MAJOR | Modules form a dependency cycle. |
 | `common/god-module` | MAJOR | A class, function, or module owns unrelated responsibilities. |
 | `common/anemic-domain` | MAJOR | Domain data is separated from the behavior that governs it. |
+| `common/speculative-abstraction` | MINOR | Abstraction, layering, or inheritance exists for a variant or reuse nobody has written. |
 | `common/missing-abstraction` | MAJOR | Repeated variation or coupling lacks a justified abstraction. |
 | `common/framework-coupling` | MAJOR | Core behavior is tightly coupled to a framework or external implementation. |
 | `common/missing-input-validation` | MAJOR | Untrusted input crosses a system boundary without validation. |
@@ -122,16 +123,19 @@ uncataloged guidance.
 | `common/nondeterministic-dependency` | MAJOR | Time, randomness, or global state is used without control. |
 | `common/complex-construction` | MAJOR | Construction performs work or requires excessive setup. |
 | `common/private-logic` | MINOR | Significant behavior is hidden behind an untestable private surface. |
+| `common/brittle-test` | MAJOR | A test asserts internals or mocks inside the unit, so it breaks on refactors or passes when behavior is wrong. |
 | `common/assertion-free-test` | MAJOR | A test exercises code but asserts nothing about its result, so it passes whatever the code does. |
 | `common/ignored-error` | BLOCKER | A failure is discarded and execution continues unsafely. |
 | `common/incomplete-error-handling` | MINOR | A recoverable failure is insufficiently checked, wrapped, or reported. |
 | `common/resource-leak` | BLOCKER | A resource is not released on all paths. |
+| `common/busy-wait` | MAJOR | A loop polls without blocking or backoff and burns CPU while it waits. |
 | `common/unmanaged-concurrency` | MAJOR | Concurrent work lacks lifecycle, cancellation, or error ownership. |
 | `common/weak-type-model` | MAJOR | Unstructured or overly broad types permit invalid states. |
 | `common/missing-timeout` | MINOR | External work has no bounded completion time. |
 | `common/graceful-shutdown` | NIT | Long-running work lacks an orderly shutdown path. |
 | `common/style-naming` | NIT | Naming conflicts with the language or repository convention. |
 | `common/style-readability` | NIT | A non-functional readability issue is not covered by automated formatting. |
+| `common/api-misuse` | MAJOR | Code uses a framework or library API against its documented contract, producing incorrect behavior. |
 | `common/deprecated-api` | MAJOR | Code or configuration uses an API or option that the project's own toolchain or framework version deprecates or has removed. |
 | `common/language-idiom` | NIT | Code ignores a clearly safer or simpler current language idiom. |
 
