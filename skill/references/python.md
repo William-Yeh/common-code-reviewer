@@ -50,7 +50,7 @@ Findings from this table are `common/language-idiom` unless a row's pattern also
 
 ## Type System
 
-- **Flag untyped public APIs**: All public functions, methods, and class attributes should have type annotations.
+- **Flag untyped public APIs**: All public functions, methods, and class attributes should have type annotations — `common/language-idiom`.
 - **Flag `Any`**: Same rule as `any` in TypeScript — MAJOR unless justified.
 - **Encourage `Protocol`** over `ABC` when you only need structural compatibility, not inheritance.
 - **Encourage `TypeIs`** (3.13+) for custom type narrowing functions; it narrows in both branches. Keep `TypeGuard` only when the narrowed type is not a subtype of the input type.

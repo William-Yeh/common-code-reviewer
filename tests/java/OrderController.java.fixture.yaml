@@ -17,9 +17,9 @@ required:
   - rule: common/hard-coded-dependency
     location: "36-40"
     rationale: "Field injection: @Autowired private JdbcTemplate/EntityManager can only be replaced by reflection or a Spring context, so tests cannot substitute them. That is common/hard-coded-dependency; use constructor injection."
-  - rule: common/missing-abstraction
+  - rule: common/framework-coupling
     location: "9, 50, 69"
-    rationale: "The @Entity Order is bound from @RequestBody and returned as the response, coupling the API to the persistence model with no DTO boundary. Coupling that lacks an abstraction is common/missing-abstraction. Use request/response records."
+    rationale: "The JPA @Entity Order is bound from @RequestBody and returned as the response, so the API contract is the persistence model and changes whenever the schema does. SKILL.md names an ORM entity used as the API payload as common/framework-coupling. Use request and response records."
   - rule: common/weak-type-model
     location: "42, 45"
     rationale: "Raw types: Map cache = new HashMap() and List getAllOrders() without generic parameters."

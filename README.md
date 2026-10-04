@@ -263,10 +263,56 @@ model output is probabilistic the results are not exactly repeatable, so it
 runs by hand or on a schedule:
 
 ```bash
-uv run tests/scripts/run_conformance.py --model sonnet
+uv run tests/scripts/run_conformance.py --model sonnet --report conformance-runs/run-1.json
+```
+
+The run uses `claude --print --bare`, which reads credentials only from
+`ANTHROPIC_API_KEY`. Try one fixture first (`--fixture edge_proxy`).
+
+Fixture pass/fail is a blunt measure: one miss fails a fixture that has twenty
+expectations. Judge a change by recall instead, across several runs, because a
+single run cannot tell a flaky miss from a systematic one. `--summarize`
+re-scores saved reports with the current parser and fixtures, without calling
+the model, and prints overall recall, recall per rule, and which expectations
+were never found versus found only sometimes:
+
+```bash
+uv run tests/scripts/run_conformance.py --summarize conformance-runs/run-*.json
 ```
 
 ## Changelog
+
+### v1.6.0 (2026-10-03)
+
+- Recall on the live conformance suite (sonnet, three runs per step) went
+  from 87.4% to 92.5% on the same 627 expectations (86.6% on the fixture set
+  before this release's corrections), with no forbidden findings and no
+  severity drift at any step. Fixtures that pass are a blunt measure, so
+  each step was judged by recall
+- `run_conformance.py --summarize` re-scores saved runs with the current
+  parser and fixtures, without calling the model, and reports overall
+  recall, recall per rule, and which expectations were never found versus
+  found only in some runs. Saved runs go in the git-ignored
+  `conformance-runs/`
+- `SKILL.md` has a Whole-unit judgments section with triggers for the
+  structural rules the reviewer had almost never used, because it judged
+  responsibility one function at a time. `god-module` went from 1/15 to
+  7/15 and `rust/clone-to-compile` from 0/3 to 3/3; `missing-abstraction`
+  went from 0/6 to 3/6 before the fixture corrections below
+- Four older reference bullets now name their rule, as ADR-0006 requires:
+  Java field injection, Python untyped public APIs, and TypeScript default
+  exports. `hard-coded-dependency` went from 16/21 to 21/21 and
+  `style-naming` from 0/3 to 3/3
+- `SKILL.md` asks for one finding per rule when a construct breaks two, such
+  as an anemic entity whose status is a free-form string
+- Corrected fixture evidence the code did not support, and added
+  `tests/go/scanner_stats.go` as clear evidence for `hot-path-allocation`
+- Added a gitleaks pre-commit hook (`pre-commit install` once per clone)
+- Known open item: god *functions*, such as Go's `CreateOrder` or Rust's
+  `process_order`, are still missed in every run even though the trigger
+  now covers functions. A rewording of the catalog definition or a run on a
+  stronger model should come before more trigger text
+- Rule coverage: **88/88 rules (100%)**: 59 common, 1 Go, 12 Rust, 16 Dockerfile
 
 ### v1.5.0 (2026-10-02)
 

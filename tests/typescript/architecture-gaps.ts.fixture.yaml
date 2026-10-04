@@ -5,9 +5,6 @@ required:
   - rule: common/circular-dependency
     location: "1"
     rationale: architecture-gaps and cycle-peer import each other.
-  - rule: common/framework-coupling
-    location: "2, 9"
-    rationale: Core review behavior constructs an Express application directly.
   - rule: common/insecure-default
     location: "10"
     rationale: Wildcard CORS is combined with credentialed requests.

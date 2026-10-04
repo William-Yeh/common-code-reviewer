@@ -1,0 +1,11 @@
+version: 1
+language: go
+source: "scanner_stats.go"
+required:
+  - rule: common/hot-path-allocation
+    location: "10"
+    rationale: "regexp.MustCompile runs once per User-Agent, and Go keeps no regex cache, so a large access log recompiles the same constant pattern on every item. Compile it once in a package-level var."
+forbidden:
+  - rule: go/panic-in-library
+    location: "10"
+    rationale: "MustCompile on a compile-time constant pattern cannot panic at run time; go.md exempts Must* helpers whose argument is a constant."

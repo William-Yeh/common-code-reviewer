@@ -44,9 +44,6 @@ required:
   - rule: common/sensitive-data-exposure
     location: "67"
     rationale: "Full card_number written to stdout/logs. Mask all but the last 4 digits, or omit."
-  - rule: common/hot-path-allocation
-    location: "38"
-    rationale: "order.clone() clones an owned Order every iteration. Restructure to move or borrow instead of cloning in the hot loop."
   - rule: common/erased-failure
     location: "56-58"
     rationale: "process_order returns bool, erasing the failure reason. Return Result<(), OrderError> so callers know *why* it failed."

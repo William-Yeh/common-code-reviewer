@@ -1,5 +1,7 @@
 # Live conformance runner default report (pass --report to put it elsewhere)
 conformance-report.json
+# Saved live runs for --summarize
+conformance-runs/
 
 # coverage.py working data; the committed evidence is tests/*/lcov.info
 .coverage

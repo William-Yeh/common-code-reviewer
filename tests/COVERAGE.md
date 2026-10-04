@@ -25,12 +25,12 @@ Run `uv run tests/scripts/sync_generated.py` after changing either.
 | `common/elevated-change-risk` | MINOR | `go/rate_limiter.go:32-41`<br>`python/pricing_engine.py:85-91` |
 | `common/erased-failure` | MINOR | `rust/order_handler.rs:56-58` |
 | `common/excess-complexity` | MINOR | `python/pricing_engine.py:69-82` |
-| `common/framework-coupling` | MAJOR | `typescript/architecture-gaps.ts:2, 9` |
+| `common/framework-coupling` | MAJOR | `java/OrderController.java:9, 50, 69` |
 | `common/god-module` | MAJOR | `go/order_handler.go:28`<br>`java/OrderController.java:34`<br>`python/order_service.py:26`<br>`rust/order_handler.rs:56-64`<br>`typescript/order-service.ts:8` |
 | `common/graceful-shutdown` | NIT | `go/order_handler.go:111-113` |
 | `common/hard-coded-dependency` | MAJOR | `go/user_service.go:83-84`<br>`java/OrderController.java:36-40`<br>`java/PaymentService.java:53, 120`<br>`python/user_management.py:95-96`<br>`rust/user_service.rs:58, 71`<br>`typescript/notification-service.ts:114-116`<br>`typescript/notification-service.ts:52, 61, 71, 79, 84` |
 | `common/hidden-side-effect` | MAJOR | `go/user_service.go:59, 68-70`<br>`java/PaymentService.java:92, 103-105`<br>`python/user_management.py:76, 84-85, 87-88`<br>`rust/user_service.rs:56-62`<br>`typescript/notification-service.ts:92, 101-103` |
-| `common/hot-path-allocation` | MINOR | `rust/order_handler.rs:38` |
+| `common/hot-path-allocation` | MINOR | `go/scanner_stats.go:10` |
 | `common/ignored-error` | BLOCKER | `go/order_handler.go:30`<br>`go/order_handler.go:68, 70, 77`<br>`go/order_handler.go:70`<br>`go/order_handler.go:20-25`<br>`go/order_handler.go:92`<br>`go/user_service.go:89`<br>`go/user_service.go:113`<br>`java/PaymentService.java:106-107`<br>`python/order_service.py:37-38`<br>`typescript/order-service.ts:29` |
 | `common/imperative-transformation` | MINOR | `python/user_management.py:114-123`<br>`typescript/order-service.ts:44-51` |
 | `common/incomplete-error-handling` | MINOR | `go/order_handler.go:44, 97`<br>`java/OrderController.java:63-64`<br>`java/OrderController.java:86`<br>`java/PaymentService.java:122`<br>`python/order_service.py:74-78`<br>`typescript/order-service.ts:59-63` |
@@ -41,7 +41,7 @@ Run `uv run tests/scripts/sync_generated.py` after changing either.
 | `common/layer-violation` | MAJOR | `typescript/notification-service.ts:1, 4-5` |
 | `common/liskov-violation` | MAJOR | `java/PaymentService.java:39-41`<br>`python/user_management.py:42-45` |
 | `common/magic-literal` | MINOR | `java/PaymentService.java:95`<br>`python/order_service.py:40`<br>`rust/order_handler.rs:72`<br>`typescript/order-service.ts:26` |
-| `common/missing-abstraction` | MAJOR | `java/OrderController.java:9, 50, 69`<br>`typescript/architecture-gaps.ts:46-54` |
+| `common/missing-abstraction` | MAJOR | `typescript/architecture-gaps.ts:46-54` |
 | `common/missing-cache` | MINOR | `typescript/architecture-gaps.ts:35-44` |
 | `common/missing-input-validation` | MAJOR | `go/order_handler.go:32`<br>`java/OrderController.java:50`<br>`python/order_service.py:26`<br>`typescript/order-service.ts:19` |
 | `common/missing-timeout` | MINOR | `go/order_handler.go:94-95`<br>`java/OrderController.java:87-88, 91, 92`<br>`python/order_service.py:74-77` |

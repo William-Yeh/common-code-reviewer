@@ -75,7 +75,7 @@ Findings from this table are `common/language-idiom` unless a row's pattern also
 
 ## Spring Boot
 
-- **Constructor injection only**: Flag `@Autowired` on fields — use constructor injection (preferably with Lombok `@RequiredArgsConstructor` or manual constructor). Field injection hides dependencies and breaks testability.
+- **Constructor injection only**: Flag `@Autowired` on fields — use constructor injection (preferably with Lombok `@RequiredArgsConstructor` or manual constructor). Field injection hides dependencies and breaks testability — `common/hard-coded-dependency`.
 - **Layer discipline**: Controller → Service → Repository. Flag controllers calling repositories directly. Flag services importing Spring Web types (`HttpServletRequest`, `ResponseEntity`).
 - **DTO ↔ Entity separation**: Flag JPA entities exposed in API responses/requests. Use DTOs (records) at the API boundary.
 - **Validation**: Use `@Valid` / `@Validated` on request DTOs with Bean Validation annotations. Flag manual validation in controllers for common rules.

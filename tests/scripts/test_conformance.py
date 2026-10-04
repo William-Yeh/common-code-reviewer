@@ -18,6 +18,9 @@ from run_conformance import (
     load_severities,
     parse_findings,
     prompt_for,
+    score_report,
+    score_result,
+    summarize_runs,
 )
 
 
@@ -163,6 +166,82 @@ Explanation.
             "dockerfile/missing-healthcheck", "MINOR", "Dockerfile", None
         )
         self.assertEqual(evaluate(fixture, [finding]), ([], []))
+
+
+
+FIXTURE = {
+    "source": "svc.go",
+    "required": [
+        {"rule": "common/ignored-error", "location": "10"},
+        {"rule": "common/god-module", "location": "3"},
+    ],
+    "forbidden": [],
+}
+HIT_ONLY_IGNORED = (
+    "### [BLOCKER] Ignored error\n**File:** `tests/go/svc.go:10`\n**Rule:** `common/ignored-error`\n"
+)
+
+
+def run_report(markdown: str) -> dict[str, object]:
+    return {"fixtures": [{"fixture": "tests/go/svc.go.fixture.yaml", "markdown": markdown}]}
+
+
+class RecallTests(unittest.TestCase):
+    SEVERITIES = {"common/ignored-error": "BLOCKER", "common/god-module": "MAJOR"}
+
+    def score(self, report: dict[str, object]) -> list[tuple[str, int, str, bool]]:
+        return score_report(report, lambda _path: FIXTURE, self.SEVERITIES)
+
+    def test_each_required_expectation_becomes_a_hit_or_miss_row(self) -> None:
+        self.assertEqual(
+            self.score(run_report(HIT_ONLY_IGNORED)),
+            [
+                ("tests/go/svc.go.fixture.yaml", 0, "common/ignored-error", True),
+                ("tests/go/svc.go.fixture.yaml", 1, "common/god-module", False),
+            ],
+        )
+
+    def test_runtime_errors_are_excluded_rather_than_counted_as_misses(self) -> None:
+        report = {"fixtures": [{"fixture": "tests/go/svc.go.fixture.yaml", "runtime_error": "Not logged in"}]}
+        self.assertEqual(self.score(report), [])
+
+    def test_summary_reports_recall_per_rule_and_expectation_stability(self) -> None:
+        both = (
+            HIT_ONLY_IGNORED
+            + "\n### [MAJOR] God module\n**File:** `tests/go/svc.go:3`\n**Rule:** `common/god-module`\n"
+        )
+        runs = [self.score(run_report(m)) for m in (HIT_ONLY_IGNORED, both, HIT_ONLY_IGNORED)]
+        summary = summarize_runs(runs)
+        self.assertEqual(summary.recall, (4, 6))
+        self.assertEqual(summary.per_rule, {"common/ignored-error": (3, 3), "common/god-module": (1, 3)})
+        self.assertEqual(summary.flaky, [("tests/go/svc.go.fixture.yaml", 1, "common/god-module")])
+        self.assertEqual(summary.systematic, [])
+
+    def test_an_expectation_missed_in_every_run_is_systematic(self) -> None:
+        runs = [self.score(run_report(HIT_ONLY_IGNORED)) for _ in range(3)]
+        self.assertEqual(
+            summarize_runs(runs).systematic, [("tests/go/svc.go.fixture.yaml", 1, "common/god-module")]
+        )
+
+
+class ScoreResultTests(unittest.TestCase):
+    def test_result_records_misses_drift_cost_and_pass_state(self) -> None:
+        drifted = HIT_ONLY_IGNORED.replace("[BLOCKER]", "[MINOR]")
+        result = score_result(
+            "tests/go/svc.go.fixture.yaml",
+            drifted,
+            {"total_cost_usd": 0.07, "modelUsage": {"m": {}}},
+            FIXTURE,
+            RecallTests.SEVERITIES,
+        )
+        self.assertFalse(result["passed"])
+        # A finding at the wrong catalog severity satisfies nothing, so both expectations miss.
+        self.assertEqual(result["missing"], FIXTURE["required"])
+        self.assertEqual(
+            result["interface_errors"],
+            [{"rule": "common/ignored-error", "severity": "MINOR", "file": "tests/go/svc.go", "location": "10"}],
+        )
+        self.assertEqual((result["cost_usd"], result["markdown"]), (0.07, drifted))
 
 
 if __name__ == "__main__":

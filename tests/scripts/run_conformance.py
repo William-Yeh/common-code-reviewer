@@ -16,6 +16,8 @@ import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
+from collections import Counter, defaultdict
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -136,6 +138,88 @@ def evaluate(
     return missing, forbidden
 
 
+Row = tuple[str, int, str, bool]  # fixture, required index, rule, hit
+Key = tuple[str, int, str]
+
+
+@dataclass(frozen=True)
+class Summary:
+    recall: tuple[int, int]
+    per_rule: dict[str, tuple[int, int]]
+    systematic: list[Key]
+    flaky: list[Key]
+
+
+def score_report(
+    report: dict[str, object],
+    load_fixture: Callable[[str], dict[str, object]],
+    severities: dict[str, str],
+) -> list[Row]:
+    """Re-score one saved run from its markdown, so parser fixes apply to old reports."""
+    rows: list[Row] = []
+    for result in report["fixtures"]:
+        if "markdown" not in result:
+            continue
+        fixture = load_fixture(result["fixture"])
+        missing, _ = evaluate(fixture, parse_findings(result["markdown"]), severities)
+        rows += [
+            (result["fixture"], index, expectation["rule"], expectation not in missing)
+            for index, expectation in enumerate(fixture["required"])
+        ]
+    return rows
+
+
+def rule_totals(rows: list[Row]) -> dict[str, tuple[int, int]]:
+    """(found, required) per rule across every row."""
+    totals: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for _fixture, _index, rule, hit in rows:
+        totals[rule][0] += hit
+        totals[rule][1] += 1
+    return {rule: (found, total) for rule, (found, total) in totals.items()}
+
+
+def stability(seen: Counter[Key], hits: Counter[Key]) -> tuple[list[Key], list[Key]]:
+    """(never found in any run, found in some runs but not all)."""
+    systematic = [key for key in seen if not hits[key]]
+    flaky = [key for key in seen if 0 < hits[key] < seen[key]]
+    return systematic, flaky
+
+
+def summarize_runs(runs: list[list[Row]]) -> Summary:
+    rows = [row for run in runs for row in run]
+    seen = Counter(row[:3] for row in rows)
+    hits = Counter(row[:3] for row in rows if row[3])
+    systematic, flaky = stability(seen, hits)
+    return Summary(
+        recall=(sum(hits.values()), sum(seen.values())),
+        per_rule=rule_totals(rows),
+        systematic=systematic,
+        flaky=flaky,
+    )
+
+
+def format_summary(summary: Summary, runs: int) -> str:
+    found, total = summary.recall
+    lines = [f"recall {found}/{total} ({found / max(total, 1):.1%}) over {runs} run(s)", "", "rule  found/required"]
+    weakest = sorted(summary.per_rule.items(), key=lambda item: item[1][0] / item[1][1])
+    lines += [f"{rule}  {f}/{t}" for rule, (f, t) in weakest if f < t]
+    lines += ["", f"systematic misses (never found): {len(summary.systematic)}"]
+    lines += [f"  {fixture} #{index} {rule}" for fixture, index, rule in summary.systematic]
+    lines += [f"flaky expectations (found in some runs): {len(summary.flaky)}"]
+    lines += [f"  {fixture} #{index} {rule}" for fixture, index, rule in summary.flaky]
+    return "\n".join(lines)
+
+
+def summarize_reports(paths: list[Path]) -> str:
+    severities = load_severities()
+
+    def load_fixture(name: str) -> dict[str, object]:
+        return yaml.safe_load((REPO_ROOT / name).read_text())
+
+    runs = [score_report(json.loads(path.read_text()), load_fixture, severities) for path in paths]
+    return format_summary(summarize_runs(runs), len(runs))
+
+
 def load_severities() -> dict[str, str]:
     severities: dict[str, str] = {}
     for path in [SKILL_DIR / "SKILL.md", *(SKILL_DIR / "references").glob("*.md")]:
@@ -223,71 +307,87 @@ def select_fixtures(patterns: list[str]) -> list[Path]:
     ]
 
 
-def main() -> None:
+def score_result(
+    name: str,
+    markdown: str,
+    envelope: dict[str, object],
+    fixture: dict[str, object],
+    severities: dict[str, str],
+) -> dict[str, object]:
+    """The report entry for one reviewed fixture."""
+    findings = parse_findings(markdown)
+    missing, forbidden = evaluate(fixture, findings, severities)
+    interface_errors = [
+        asdict(finding) for finding in findings if severities.get(finding.rule) != finding.severity
+    ]
+    return {
+        "fixture": name,
+        "passed": not missing and not forbidden and not interface_errors,
+        "missing": missing,
+        "forbidden": forbidden,
+        "interface_errors": interface_errors,
+        "findings": [asdict(finding) for finding in findings],
+        "model_usage": envelope.get("modelUsage", {}),
+        "cost_usd": envelope.get("total_cost_usd"),
+        "markdown": markdown,
+    }
+
+
+def run_fixture(path: Path, args: argparse.Namespace, severities: dict[str, str]) -> dict[str, object]:
+    name = str(path.relative_to(REPO_ROOT))
+    fixture = yaml.safe_load(path.read_text())
+    print(f"running {name}", flush=True)
+    try:
+        markdown, envelope = invoke_claude(
+            path,
+            fixture,
+            model=args.model,
+            budget=args.max_budget_usd,
+            transport_retries=args.transport_retries,
+        )
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        return {"fixture": name, "passed": False, "runtime_error": str(exc)}
+    return score_result(name, markdown, envelope, fixture, severities)
+
+
+def argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="sonnet")
     parser.add_argument("--max-budget-usd", type=float, default=0.50)
     parser.add_argument("--transport-retries", type=int, default=1)
     parser.add_argument("--fixture", action="append", default=[])
     parser.add_argument("--report", type=Path, default=Path("conformance-report.json"))
-    args = parser.parse_args()
+    parser.add_argument(
+        "--summarize", type=Path, nargs="+", metavar="REPORT",
+        help="print recall per rule across saved reports and exit; makes no model calls",
+    )
+    return parser
 
+
+def main() -> None:
+    parser = argument_parser()
+    args = parser.parse_args()
+    if args.summarize:
+        print(summarize_reports(args.summarize))
+        return
     fixtures = select_fixtures(args.fixture)
     if not fixtures:
         parser.error("no Conformance Fixtures matched")
 
+    severities = load_severities()
     report: dict[str, object] = {
         "started_at": datetime.now(UTC).isoformat(),
         "runtime": "Claude Code",
         "runtime_version": claude_version(),
         "requested_model": args.model,
-        "fixtures": [],
+        "fixtures": [run_fixture(path, args, severities) for path in fixtures],
     }
-    severities = load_severities()
-    passed = True
-    for path in fixtures:
-        fixture = yaml.safe_load(path.read_text())
-        print(f"running {path.relative_to(REPO_ROOT)}", flush=True)
-        try:
-            markdown, envelope = invoke_claude(
-                path,
-                fixture,
-                model=args.model,
-                budget=args.max_budget_usd,
-                transport_retries=args.transport_retries,
-            )
-            findings = parse_findings(markdown)
-            missing, forbidden = evaluate(fixture, findings, severities)
-            interface_errors = [
-                asdict(finding)
-                for finding in findings
-                if severities.get(finding.rule) != finding.severity
-            ]
-            result = {
-                "fixture": str(path.relative_to(REPO_ROOT)),
-                "passed": not missing and not forbidden and not interface_errors,
-                "missing": missing,
-                "forbidden": forbidden,
-                "interface_errors": interface_errors,
-                "findings": [asdict(finding) for finding in findings],
-                "model_usage": envelope.get("modelUsage", {}),
-                "cost_usd": envelope.get("total_cost_usd"),
-                "markdown": markdown,
-            }
-        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            result = {
-                "fixture": str(path.relative_to(REPO_ROOT)),
-                "passed": False,
-                "runtime_error": str(exc),
-            }
-        passed = passed and bool(result["passed"])
-        report["fixtures"].append(result)
-
     report["finished_at"] = datetime.now(UTC).isoformat()
-    report["passed"] = passed
+    report["passed"] = all(result["passed"] for result in report["fixtures"])
     args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(f"wrote {args.report}")
-    sys.exit(0 if passed else 1)
+    print(summarize_reports([args.report]).split("\n")[0])
+    sys.exit(0 if report["passed"] else 1)
 
 
 if __name__ == "__main__":

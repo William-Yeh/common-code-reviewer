@@ -4,7 +4,7 @@ description: Use when the user asks to review code, audit changes, or review a P
 license: Apache-2.0
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Code Review
@@ -204,6 +204,36 @@ Look for:
 - Complex constructors that make test setup painful
 - Private methods containing significant logic that can't be tested in isolation
 
+### Whole-unit judgments
+
+These rules judge a function, class, or file as a whole, so a pass over lines
+alone misses them. Small, simple functions do not clear them.
+
+- `common/god-module`: list the kinds of concern one function, class, or file handles:
+  request parsing or routing, business rules, persistence or SQL, caching,
+  outbound HTTP or messaging, file or console I/O, configuration. Three or
+  more unrelated kinds in one unit make it a god module, however short each
+  method is. Cite the unit's declaration: the function or class, or for a
+  whole file its first top-level declaration, never its import lines.
+- `common/framework-coupling`: business rules take, return, or live inside
+  framework objects, such as a web framework's request, response, context or
+  app object, or an ORM entity used as the API payload. Cite where the
+  framework object enters the core logic. Plain infrastructure clients
+  (database, HTTP, filesystem) in domain code are `common/layer-violation`.
+- `common/missing-abstraction`: the same variation is handled in two or more
+  places, such as the same `if kind == ...` or type switch in both `charge`
+  and `refund`, or callers repeat the same coupling to a concrete type. A
+  single dispatch that must grow with each new variant is
+  `common/open-closed-violation`; identical code is `common/duplicated-logic`.
+- `common/mixed-abstraction`: one function interleaves domain steps with
+  mechanical detail, such as string or byte handling, SQL text, HTTP status
+  checks, or retry loops, so the reader changes level from line to line.
+  Cite the function.
+- `common/hot-path-allocation`: code that runs per request or per item
+  allocates or copies something it could build once or borrow, such as a
+  regex compiled inside a loop, a client or formatter built on every call, or
+  a collection collected only to be iterated again.
+
 ### Style (lowest impact)
 
 - Naming convention inconsistencies within the changeset
@@ -348,7 +378,7 @@ Follow this sequence:
 2. Identify languages in the changeset
 3. Load relevant language reference(s) from `references/`
 4. Read the diff carefully. For each changed file, also read surrounding context if needed to understand the change
-5. Apply common principles (this file) + language-specific rules (reference files)
+5. Apply common principles (this file) + language-specific rules (reference files), then judge each touched function, class, and file as a whole for the Whole-unit judgments
 6. Score every touched unit per Change Risk and decide which rule, if any, fires
 7. Resolve every finding to a catalogued Rule ID and its fixed severity
 8. Produce findings in the output format above
@@ -364,3 +394,6 @@ Follow this sequence:
 - If code is correct but unconventional, think twice before flagging. Convention matters, but correctness matters more.
 - Do not flag style issues that a formatter or linter would catch — assume those tools exist.
 - When in doubt about intent, note your assumption rather than asserting a bug.
+- Report one finding per rule. When one construct breaks two catalogued rules, such as an anemic
+  entity whose status is a free-form string (`common/anemic-domain` and `common/weak-type-model`),
+  write two findings, each with its own Rule, instead of folding one into the other's text.

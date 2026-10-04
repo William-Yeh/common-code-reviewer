@@ -86,7 +86,7 @@ Follow **ESLint recommended** + **typescript-eslint** (flat config) conventions.
 - Semicolons required
 - Single quotes for strings (double quotes in JSX)
 - Explicit function return types on exports
-- No default exports (named exports for refactoring safety)
+- No default exports (named exports keep one name per symbol across importers) — `common/style-naming`
 - Imports ordered: external → internal → relative, each group alphabetized
 - Prefer `type` imports (`import type { Foo }`) to avoid runtime import of types
 
@@ -146,7 +146,7 @@ Check whether React Compiler is enabled (`babel-plugin-react-compiler`, or `reac
 - **Shared mutable singletons**: Module-level `let` state accessed by multiple consumers
 - **String-typed APIs**: Using `string` for IDs, statuses, types — use branded types or unions
 - **Callback hell in legacy code being modified**: If touching it, refactor to async/await
-- **Default exports**: Prefer named exports for refactoring safety and IDE support
+- **Default exports**: Prefer named exports for refactoring safety and IDE support — `common/style-naming`
 
 ## Change Risk
 
